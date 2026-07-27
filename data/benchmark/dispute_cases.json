@@ -1,0 +1,521 @@
+{
+  "_meta": {
+    "purpose": "적합성 판정 정답셋 (애블레이션·적중률 산출용)",
+    "source": "금융감독원 금융분쟁조정위원회 조정결정례 및 분쟁 사례 유형을 참조해 재구성한 **가공 샘플**",
+    "caveat": "실제 조정결정례 원문이 아니다. 사건번호·당사자·수치는 재구성한 것이며, 제출·평가 단계에서는 fss.or.kr 조정결정례 원문으로 교체해야 한다. label은 금소법 6대 판매원칙 기준으로 저자가 부여한 정답 라벨이다.",
+    "label_scheme": {
+      "pass": "권유·판매가 적합. 판매원칙 위반 없음",
+      "warn": "판매 가능하나 설명 보강·조건 고지 등이 필요한 경계 사례",
+      "fail": "부적합. 판매원칙 위반 소지가 명백"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "CASE-001",
+      "title": "고령 예금 고객에게 원금손실 가능 파생결합증권 권유",
+      "principle": ["적합성", "설명의무"],
+      "label": "fail",
+      "facts": "정기예금 만기 고객(78세, 예금 외 투자경험 없음)에게 창구에서 원금 비보장 파생결합증권을 권유했다. 투자성향 진단은 '안정형'으로 나왔으나 판매 직원이 재진단을 유도해 '적극투자형'으로 변경한 뒤 계약을 체결했다. 기초자산 하락으로 원금 40% 손실이 발생했다.",
+      "decision_gist": "투자성향 재진단 유도는 적합성원칙 회피에 해당하고, 원금 손실 가능 범위에 대한 설명이 이해 가능한 수준으로 이루어졌다고 볼 수 없어 판매업자 책임을 인정했다.",
+      "product": {
+        "product_id": "BM-001",
+        "name": "지수연계 파생결합증권 (원금 비보장)",
+        "category": "fund",
+        "summary": "해외지수 기초자산, 3년 만기, 조건 미충족 시 원금 손실. 예상수익률 연 6.5%",
+        "intr_rate": 6.5,
+        "intr_rate2": 6.5,
+        "save_trm_months": 36,
+        "risk_notes": ["원금 손실 가능(최대 100%)", "예금자보호 대상 아님", "중도환매 시 환매수수료 및 손실 확대"]
+      },
+      "persona": {
+        "persona_id": "BM-P-001",
+        "age": 78,
+        "sex": "여성",
+        "region": "부산광역시",
+        "occupation": "무직",
+        "education": "고졸",
+        "marital_status": "사별",
+        "household_size": 1,
+        "persona_text": "국민연금과 정기예금 이자로 생활한다. 투자 경험이 없고 원금이 줄어드는 상품은 겪어본 적 없다.",
+        "traits": ["보수적 투자성향", "대면 채널 선호"],
+        "finance": {
+          "annual_income_manwon": 1400,
+          "monthly_income_manwon": 117,
+          "financial_assets_manwon": 9000,
+          "real_assets_manwon": 12000,
+          "debt_manwon": 0,
+          "monthly_debt_service_manwon": 0,
+          "monthly_surplus_manwon": 20,
+          "dsr_pct": 0.0,
+          "income_quintile": 1
+        }
+      }
+    },
+    {
+      "case_id": "CASE-002",
+      "title": "최고금리만 강조한 적금 광고 - 우대조건 사실상 달성 곤란",
+      "principle": ["광고규제", "설명의무"],
+      "label": "warn",
+      "facts": "'최고 연 7%' 문구를 앞세운 적금에 가입했으나 기본금리는 2.0%였고, 우대금리 5%p는 카드 실적·급여이체·주택청약 가입 등 5개 조건을 24개월 전부 충족해야 적용되는 구조였다. 소비자는 만기에 연 2.4%만 수령했다.",
+      "decision_gist": "기본금리와 우대조건을 함께 표시했고 약관에 조건이 기재되어 있어 계약 무효까지는 인정하지 않았으나, 최고금리 위주 표시는 오인 소지가 있어 광고 개선을 권고했다.",
+      "product": {
+        "product_id": "BM-002",
+        "name": "최고 7% 챌린지 적금",
+        "category": "saving",
+        "summary": "12개월 정액적립식. 기본 2.0%, 우대조건 5개 전부 충족 시 최고 7.0%",
+        "intr_rate": 2.0,
+        "intr_rate2": 7.0,
+        "save_trm_months": 12,
+        "min_monthly_manwon": 10,
+        "max_monthly_manwon": 30,
+        "preferentials": [
+          {"name": "5개 복합 우대", "rate_bonus_pct": 5.0, "requirement": "급여이체+카드실적+청약가입+마케팅동의+첫거래 전부 충족", "est_attainment_rate": 0.08}
+        ],
+        "risk_notes": ["우대조건 전부 충족률이 매우 낮다", "월 30만원 한도로 실제 이자 수령액이 작다"]
+      },
+      "persona": {
+        "persona_id": "BM-P-002",
+        "age": 27,
+        "sex": "남성",
+        "region": "경기도",
+        "occupation": "서비스직 종사자",
+        "education": "전문대졸",
+        "marital_status": "미혼",
+        "household_size": 1,
+        "persona_text": "고금리 적금 정보를 커뮤니티에서 찾아 가입한다. 금리 숫자에 민감하지만 약관은 끝까지 읽지 않는다.",
+        "traits": ["가격 민감", "디지털 친화"],
+        "finance": {
+          "annual_income_manwon": 3200,
+          "monthly_income_manwon": 267,
+          "financial_assets_manwon": 800,
+          "real_assets_manwon": 0,
+          "debt_manwon": 1200,
+          "monthly_debt_service_manwon": 11,
+          "monthly_surplus_manwon": 74,
+          "dsr_pct": 4.1,
+          "income_quintile": 2
+        }
+      }
+    },
+    {
+      "case_id": "CASE-003",
+      "title": "주택담보대출 취급 조건으로 신용카드 가입 요구",
+      "principle": ["불공정영업금지"],
+      "label": "fail",
+      "facts": "주택담보대출 승인 과정에서 담당 직원이 '금리 감면을 위해 필요하다'며 신용카드 발급과 월 50만원 이상 사용 약정, 청약저축 가입을 대출 실행 조건처럼 안내했다. 소비자는 원하지 않는 카드를 발급받았다.",
+      "decision_gist": "대출성 상품 취급과 관련해 소비자 의사에 반하는 다른 상품 계약을 사실상 강요한 것으로 보아 불공정영업행위에 해당한다고 판단했다.",
+      "product": {
+        "product_id": "BM-003",
+        "name": "금리감면 연계 주택담보대출",
+        "category": "loan",
+        "summary": "카드 실적·청약 가입 시 0.5%p 감면. 실무상 대출 실행 조건처럼 안내됨",
+        "intr_rate": 4.2,
+        "intr_rate2": 5.5,
+        "save_trm_months": 360,
+        "limit_manwon": 30000,
+        "risk_notes": ["감면조건 유지 실패 시 금리 상승", "타 상품 가입 강요는 금소법 제20조 위반 소지"]
+      },
+      "persona": {
+        "persona_id": "BM-P-003",
+        "age": 38,
+        "sex": "여성",
+        "region": "서울특별시",
+        "occupation": "사무직 회사원",
+        "education": "대졸",
+        "marital_status": "기혼",
+        "household_size": 3,
+        "persona_text": "첫 집 마련을 위해 대출을 신청했고, 승인 지연을 우려해 직원 안내를 거절하기 어려웠다.",
+        "traits": ["대면 채널 선호"],
+        "finance": {
+          "annual_income_manwon": 6200,
+          "monthly_income_manwon": 517,
+          "financial_assets_manwon": 5000,
+          "real_assets_manwon": 42000,
+          "debt_manwon": 28000,
+          "monthly_debt_service_manwon": 257,
+          "monthly_surplus_manwon": -81,
+          "dsr_pct": 49.7,
+          "income_quintile": 3
+        }
+      }
+    },
+    {
+      "case_id": "CASE-004",
+      "title": "변동금리 대출의 금리상승 위험 설명 누락",
+      "principle": ["설명의무"],
+      "label": "fail",
+      "facts": "변동금리 신용대출 계약 시 '금리는 계속 낮은 수준을 유지할 것'이라는 설명을 들었고 금리 재산정 주기와 상승 시 월 상환액 변동 시나리오는 안내받지 못했다. 2년 뒤 금리가 2.3%p 상승해 상환 부담이 급증했다.",
+      "decision_gist": "불확실한 사항에 대한 단정적 판단 제공 및 중요사항(금리 변동 구조) 설명 누락으로 부당권유·설명의무 위반을 인정했다.",
+      "product": {
+        "product_id": "BM-004",
+        "name": "변동금리 신용대출",
+        "category": "loan",
+        "summary": "금융채 6개월 연동 변동금리, 5년 만기 원리금균등",
+        "intr_rate": 5.1,
+        "intr_rate2": 9.8,
+        "save_trm_months": 60,
+        "limit_manwon": 8000,
+        "risk_notes": ["6개월마다 금리 재산정", "금리 1%p 상승 시 월 상환액 증가"]
+      },
+      "persona": {
+        "persona_id": "BM-P-004",
+        "age": 44,
+        "sex": "남성",
+        "region": "인천광역시",
+        "occupation": "생산직 근로자",
+        "education": "고졸",
+        "marital_status": "기혼",
+        "household_size": 4,
+        "persona_text": "생활자금 목적으로 대출을 받았다. 금리 구조에 대한 이해가 낮고 월 상환액 기준으로만 판단한다.",
+        "traits": ["가격 민감"],
+        "finance": {
+          "annual_income_manwon": 4800,
+          "monthly_income_manwon": 400,
+          "financial_assets_manwon": 1500,
+          "real_assets_manwon": 8000,
+          "debt_manwon": 9500,
+          "monthly_debt_service_manwon": 87,
+          "monthly_surplus_manwon": 49,
+          "dsr_pct": 21.8,
+          "income_quintile": 2
+        }
+      }
+    },
+    {
+      "case_id": "CASE-005",
+      "title": "DSR 한도 근접 차주에게 추가 신용대출 권유",
+      "principle": ["적정성", "적합성"],
+      "label": "fail",
+      "facts": "기존 주택담보대출과 신용대출로 DSR이 이미 38%인 차주에게 한도 소진 직전의 추가 신용대출을 권유했다. 소비자는 상환 부담을 감당하지 못해 3개월 뒤 연체가 발생했다.",
+      "decision_gist": "재산상황·부채 수준을 고려하면 적정하지 않은 계약이며, 부적정 사실을 고지·확인받은 기록도 없어 적정성원칙 위반으로 판단했다.",
+      "product": {
+        "product_id": "BM-005",
+        "name": "한도 추가 신용대출",
+        "category": "loan",
+        "summary": "기존 대출 보유 차주 대상 추가 한도 제공, 연 7.9~13.5%",
+        "intr_rate": 7.9,
+        "intr_rate2": 13.5,
+        "save_trm_months": 36,
+        "limit_manwon": 3000,
+        "risk_notes": ["DSR 40% 규제 한도 근접", "연체 시 연체이자율 가산"]
+      },
+      "persona": {
+        "persona_id": "BM-P-005",
+        "age": 41,
+        "sex": "남성",
+        "region": "대구광역시",
+        "occupation": "자영업자",
+        "education": "대졸",
+        "marital_status": "기혼",
+        "household_size": 4,
+        "persona_text": "사업 운영자금 부족으로 추가 대출을 알아보던 중 권유를 받았다. 매출 변동이 크다.",
+        "traits": ["적극적 투자성향"],
+        "finance": {
+          "annual_income_manwon": 5400,
+          "monthly_income_manwon": 450,
+          "financial_assets_manwon": 900,
+          "real_assets_manwon": 15000,
+          "debt_manwon": 18600,
+          "monthly_debt_service_manwon": 171,
+          "monthly_surplus_manwon": -18,
+          "dsr_pct": 38.0,
+          "income_quintile": 3
+        }
+      }
+    },
+    {
+      "case_id": "CASE-006",
+      "title": "안정형 성향 고객에게 예금자보호 대상 정기예금 권유",
+      "principle": ["적합성"],
+      "label": "pass",
+      "facts": "안정형 투자성향, 여유자금 3천만원을 1년간 운용하려는 고객에게 예금자보호 한도 내 정기예금을 권유했다. 금리·중도해지이율·만기 후 이율을 설명하고 확인 서명을 받았다.",
+      "decision_gist": "소비자의 재산상황·목적에 부합하고 중요사항 설명이 이루어져 판매원칙 위반이 없다.",
+      "product": {
+        "product_id": "BM-006",
+        "name": "1년 만기 정기예금",
+        "category": "deposit",
+        "summary": "연 3.2% 고정금리, 예금자보호 대상",
+        "intr_rate": 3.2,
+        "intr_rate2": 3.4,
+        "save_trm_months": 12,
+        "limit_manwon": 5000,
+        "risk_notes": ["예금자보호 한도 5천만원 초과분은 비보호", "중도해지 시 중도해지이율 적용"]
+      },
+      "persona": {
+        "persona_id": "BM-P-006",
+        "age": 52,
+        "sex": "여성",
+        "region": "서울특별시",
+        "occupation": "초등학교 교사",
+        "education": "대학원졸",
+        "marital_status": "기혼",
+        "household_size": 3,
+        "persona_text": "원금 손실을 원하지 않고, 1년 후 자녀 학자금으로 쓸 자금을 안전하게 예치하려 한다.",
+        "traits": ["보수적 투자성향"],
+        "finance": {
+          "annual_income_manwon": 7200,
+          "monthly_income_manwon": 600,
+          "financial_assets_manwon": 14000,
+          "real_assets_manwon": 48000,
+          "debt_manwon": 6000,
+          "monthly_debt_service_manwon": 55,
+          "monthly_surplus_manwon": 185,
+          "dsr_pct": 9.2,
+          "income_quintile": 4
+        }
+      }
+    },
+    {
+      "case_id": "CASE-007",
+      "title": "리볼빙(일부결제금액이월약정) 수수료율 미고지",
+      "principle": ["설명의무", "부당권유금지"],
+      "label": "fail",
+      "facts": "카드 발급 시 전화 안내로 '결제 부담을 줄여주는 서비스'라며 리볼빙을 신청받았고, 연 18%대 수수료율과 잔액 누적 구조는 설명하지 않았다. 6개월 후 이월잔액과 수수료가 크게 늘었다.",
+      "decision_gist": "비용에 관한 중요사항을 설명하지 않고 유리한 측면만 알린 것으로 설명의무 및 부당권유금지 위반을 인정했다.",
+      "product": {
+        "product_id": "BM-007",
+        "name": "리볼빙 결합 신용카드",
+        "category": "card",
+        "summary": "일부결제금액이월약정 기본 신청 유도, 수수료 연 8.9~19.9%",
+        "intr_rate": 8.9,
+        "intr_rate2": 19.9,
+        "limit_manwon": 500,
+        "risk_notes": ["이월잔액 누적 시 실질 부담 급증", "최소결제비율만 납부 시 원금 감소가 매우 느리다"]
+      },
+      "persona": {
+        "persona_id": "BM-P-007",
+        "age": 24,
+        "sex": "여성",
+        "region": "광주광역시",
+        "occupation": "아르바이트",
+        "education": "고졸",
+        "marital_status": "미혼",
+        "household_size": 1,
+        "persona_text": "월 소득이 불규칙해 카드 결제일마다 잔액이 부족하다. 금융 지식이 적다.",
+        "traits": ["가격 민감", "디지털 친화"],
+        "finance": {
+          "annual_income_manwon": 1800,
+          "monthly_income_manwon": 150,
+          "financial_assets_manwon": 120,
+          "real_assets_manwon": 0,
+          "debt_manwon": 600,
+          "monthly_debt_service_manwon": 6,
+          "monthly_surplus_manwon": 42,
+          "dsr_pct": 4.0,
+          "income_quintile": 1
+        }
+      }
+    },
+    {
+      "case_id": "CASE-008",
+      "title": "여유자금 충분한 청년에게 우대조건 달성 가능한 적금 권유",
+      "principle": ["적합성"],
+      "label": "pass",
+      "facts": "급여이체와 카드 사용을 이미 주거래로 하고 있고 월 여유자금이 120만원인 29세 직장인에게 월 50만원 36개월 적금을 권유했다. 기본금리·우대조건별 금리·중도해지 불이익을 표로 설명했다.",
+      "decision_gist": "재산상황과 목적에 부합하고 우대조건 달성 가능성도 높아 적합한 권유로 판단했다.",
+      "product": {
+        "product_id": "BM-008",
+        "name": "주거래 우대 적금",
+        "category": "saving",
+        "summary": "36개월, 기본 3.7% + 급여이체·카드 우대 1.5%p",
+        "intr_rate": 3.7,
+        "intr_rate2": 5.2,
+        "save_trm_months": 36,
+        "min_monthly_manwon": 10,
+        "max_monthly_manwon": 50,
+        "risk_notes": ["중도해지 시 우대금리 미적용"]
+      },
+      "persona": {
+        "persona_id": "BM-P-008",
+        "age": 29,
+        "sex": "남성",
+        "region": "서울특별시",
+        "occupation": "소프트웨어 개발자",
+        "education": "대졸",
+        "marital_status": "미혼",
+        "household_size": 1,
+        "persona_text": "급여이체와 카드 결제를 한 은행으로 모아 쓰고 있다. 3년 뒤 전세보증금 마련이 목표다.",
+        "traits": ["디지털 친화", "보수적 투자성향"],
+        "finance": {
+          "annual_income_manwon": 6600,
+          "monthly_income_manwon": 550,
+          "financial_assets_manwon": 4200,
+          "real_assets_manwon": 0,
+          "debt_manwon": 1500,
+          "monthly_debt_service_manwon": 14,
+          "monthly_surplus_manwon": 184,
+          "dsr_pct": 2.5,
+          "income_quintile": 4
+        }
+      }
+    },
+    {
+      "case_id": "CASE-009",
+      "title": "장기 적금 중도해지 불이익 설명 부족",
+      "principle": ["설명의무"],
+      "label": "warn",
+      "facts": "5년 만기 적금 가입 후 2년차에 자금이 필요해 해지했으나, 중도해지이율이 기본금리의 30% 수준이라는 점을 사전에 충분히 인지하지 못했다고 주장했다. 설명서에는 기재되어 있었고 서명도 받았다.",
+      "decision_gist": "설명서 교부·서명 사실이 확인되어 위반으로 단정하기는 어려우나, 장기 상품의 중도해지 불이익에 대한 강조 표시 개선을 권고했다.",
+      "product": {
+        "product_id": "BM-009",
+        "name": "5년 장기 목돈 적금",
+        "category": "saving",
+        "summary": "60개월 정액적립식, 연 4.0% 고정",
+        "intr_rate": 4.0,
+        "intr_rate2": 4.3,
+        "save_trm_months": 60,
+        "min_monthly_manwon": 20,
+        "max_monthly_manwon": 100,
+        "risk_notes": ["중도해지이율은 기본금리의 20~40% 수준", "5년 유지 부담"]
+      },
+      "persona": {
+        "persona_id": "BM-P-009",
+        "age": 35,
+        "sex": "여성",
+        "region": "경상남도",
+        "occupation": "간호사",
+        "education": "전문대졸",
+        "marital_status": "기혼",
+        "household_size": 3,
+        "persona_text": "장기 저축 의지는 있으나 자녀 양육비 등 예상 밖 지출이 자주 생긴다.",
+        "traits": ["보수적 투자성향"],
+        "finance": {
+          "annual_income_manwon": 5200,
+          "monthly_income_manwon": 433,
+          "financial_assets_manwon": 3000,
+          "real_assets_manwon": 20000,
+          "debt_manwon": 13000,
+          "monthly_debt_service_manwon": 119,
+          "monthly_surplus_manwon": 37,
+          "dsr_pct": 27.5,
+          "income_quintile": 3
+        }
+      }
+    },
+    {
+      "case_id": "CASE-010",
+      "title": "예금자보호 한도 초과 예치에 대한 안내 미흡",
+      "principle": ["설명의무"],
+      "label": "warn",
+      "facts": "1억 2천만원을 한 금융회사 정기예금에 예치했으나 예금자보호 한도(5천만원)를 초과한다는 점과 분산 예치 필요성에 대한 안내가 형식적으로만 이루어졌다.",
+      "decision_gist": "약관에 보호 한도가 기재되어 있으나 고액 예치 고객에 대한 적극적 안내가 필요하다고 보아 개선을 권고했다.",
+      "product": {
+        "product_id": "BM-010",
+        "name": "고액 우대 정기예금",
+        "category": "deposit",
+        "summary": "1억원 이상 예치 시 0.15%p 우대, 12개월",
+        "intr_rate": 3.3,
+        "intr_rate2": 3.45,
+        "save_trm_months": 12,
+        "limit_manwon": 100000,
+        "risk_notes": ["예금자보호 한도 5천만원 초과분 비보호"]
+      },
+      "persona": {
+        "persona_id": "BM-P-010",
+        "age": 67,
+        "sex": "남성",
+        "region": "경기도",
+        "occupation": "무직",
+        "education": "대졸",
+        "marital_status": "기혼",
+        "household_size": 2,
+        "persona_text": "은퇴 후 퇴직금을 예금으로만 운용한다. 원금 보호를 최우선으로 생각한다.",
+        "traits": ["보수적 투자성향", "대면 채널 선호"],
+        "finance": {
+          "annual_income_manwon": 2600,
+          "monthly_income_manwon": 217,
+          "financial_assets_manwon": 13000,
+          "real_assets_manwon": 35000,
+          "debt_manwon": 0,
+          "monthly_debt_service_manwon": 0,
+          "monthly_surplus_manwon": 91,
+          "dsr_pct": 0.0,
+          "income_quintile": 2
+        }
+      }
+    },
+    {
+      "case_id": "CASE-011",
+      "title": "매출 변동 큰 자영업자에게 만기 일시상환 대출 권유",
+      "principle": ["적정성", "설명의무"],
+      "label": "warn",
+      "facts": "월 매출 변동폭이 큰 개인사업자에게 12개월 만기 일시상환 대출을 권유했다. 기한연장이 심사를 통해 거절될 수 있다는 점은 약관에 있었으나 구두 설명은 '대부분 연장된다'는 취지였다.",
+      "decision_gist": "상품 구조 자체는 사업자금 용도에 부합하나, 기한연장 거절 가능성을 완화해 설명한 부분은 개선이 필요하다고 보았다.",
+      "product": {
+        "product_id": "BM-011",
+        "name": "매출연동 사업자 신용대출",
+        "category": "loan",
+        "summary": "12개월 만기 일시상환, 연 6.2~11.0% 변동",
+        "intr_rate": 6.2,
+        "intr_rate2": 11.0,
+        "save_trm_months": 12,
+        "limit_manwon": 4000,
+        "risk_notes": ["만기 일시상환 구조", "기한연장 거절 가능", "변동금리"]
+      },
+      "persona": {
+        "persona_id": "BM-P-011",
+        "age": 48,
+        "sex": "남성",
+        "region": "부산광역시",
+        "occupation": "자영업자",
+        "education": "고졸",
+        "marital_status": "기혼",
+        "household_size": 3,
+        "persona_text": "식당을 운영하며 성수기·비수기 매출 차이가 3배에 달한다. 운영자금 회전을 위해 대출을 이용한다.",
+        "traits": ["가격 민감"],
+        "finance": {
+          "annual_income_manwon": 4600,
+          "monthly_income_manwon": 383,
+          "financial_assets_manwon": 700,
+          "real_assets_manwon": 9000,
+          "debt_manwon": 11000,
+          "monthly_debt_service_manwon": 101,
+          "monthly_surplus_manwon": 29,
+          "dsr_pct": 26.4,
+          "income_quintile": 3
+        }
+      }
+    },
+    {
+      "case_id": "CASE-012",
+      "title": "저소득 사회초년생에게 고실적 조건 연회비 카드 권유",
+      "principle": ["적합성", "광고규제"],
+      "label": "warn",
+      "facts": "월 소득 150만원인 사회초년생에게 전월 실적 100만원 조건의 캐시백 카드를 권유했다. 연회비 3만원은 사용액과 무관하게 부과되고, 실적 조건 달성 시 소비가 소득의 60%를 넘는 구조였다.",
+      "decision_gist": "위법이라 보기는 어려우나 소득 대비 실적 조건이 과도해 혜택을 받기 어려운 고객군에 대한 권유는 적합성 측면에서 주의가 필요하다.",
+      "product": {
+        "product_id": "BM-012",
+        "name": "실적조건 캐시백 카드",
+        "category": "card",
+        "summary": "전월 실적 100만원 이상 시 10% 캐시백(월 2만원 한도), 연회비 3만원",
+        "intr_rate": 9.5,
+        "intr_rate2": 19.9,
+        "limit_manwon": 300,
+        "risk_notes": ["연회비는 사용 여부와 무관하게 부과", "실적 산정 제외 항목이 많다"]
+      },
+      "persona": {
+        "persona_id": "BM-P-012",
+        "age": 23,
+        "sex": "남성",
+        "region": "대전광역시",
+        "occupation": "사무직 회사원",
+        "education": "대졸",
+        "marital_status": "미혼",
+        "household_size": 1,
+        "persona_text": "첫 직장에 입사했다. 카드 혜택 정보를 많이 찾아보지만 실적 조건 계산에는 익숙하지 않다.",
+        "traits": ["디지털 친화", "가격 민감"],
+        "finance": {
+          "annual_income_manwon": 1800,
+          "monthly_income_manwon": 150,
+          "financial_assets_manwon": 300,
+          "real_assets_manwon": 0,
+          "debt_manwon": 1400,
+          "monthly_debt_service_manwon": 13,
+          "monthly_surplus_manwon": 35,
+          "dsr_pct": 8.7,
+          "income_quintile": 1
+        }
+      }
+    }
+  ]
+}

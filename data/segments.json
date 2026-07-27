@@ -1,0 +1,54 @@
+[
+  {
+    "name": "청년_사회초년생",
+    "age_min": 19,
+    "age_max": 29,
+    "income_max_manwon": 4200
+  },
+  {
+    "name": "청년_중소득",
+    "age_min": 25,
+    "age_max": 34,
+    "income_min_manwon": 3000,
+    "income_max_manwon": 6400
+  },
+  {
+    "name": "3040_직장인",
+    "age_min": 30,
+    "age_max": 49,
+    "occupations_include": ["사무", "개발", "관리자", "공무원", "교사", "간호", "전문"]
+  },
+  {
+    "name": "3040_생애최초",
+    "age_min": 30,
+    "age_max": 45,
+    "income_max_manwon": 7000
+  },
+  {
+    "name": "저소득_취약차주",
+    "age_min": 19,
+    "income_quintiles": [1, 2],
+    "monthly_surplus_max_manwon": 50
+  },
+  {
+    "name": "고DSR_차주",
+    "age_min": 25,
+    "income_quintiles": [1, 2, 3],
+    "dsr_min_pct": 30.0
+  },
+  {
+    "name": "시니어_은퇴전후",
+    "age_min": 55,
+    "age_max": 75
+  },
+  {
+    "name": "시니어_저소득",
+    "age_min": 60,
+    "income_quintiles": [1, 2]
+  },
+  {
+    "name": "자영업_소상공인",
+    "age_min": 25,
+    "occupations_include": ["자영업", "소상공인", "프리랜서"]
+  }
+]

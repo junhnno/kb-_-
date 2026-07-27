@@ -1,0 +1,44 @@
+{
+  "_meta": {
+    "purpose": "세그먼트×상품군 실제 보유율 벤치마크. 시뮬레이션 가입의향률과 대조해 순위상관·MAE를 산출한다.",
+    "source": "통계청 가계금융복지조사 및 금융권 공표 통계 기반 근사치",
+    "caveat": "PoC용 근사값이다. KOSIS 오픈API로 최신 수치를 받아 교체할 것. '보유율'과 '가입의향률'은 정의가 다르므로 절대값 일치보다 세그먼트 간 순위 일치(Spearman)를 1차 지표로 본다.",
+    "unit": "비율(0~1)"
+  },
+  "holding_rates": [
+    {"segment": "청년_사회초년생", "category": "saving", "rate": 0.52},
+    {"segment": "청년_중소득", "category": "saving", "rate": 0.61},
+    {"segment": "3040_직장인", "category": "saving", "rate": 0.58},
+    {"segment": "3040_생애최초", "category": "saving", "rate": 0.5},
+    {"segment": "저소득_취약차주", "category": "saving", "rate": 0.31},
+    {"segment": "시니어_은퇴전후", "category": "saving", "rate": 0.34},
+    {"segment": "시니어_저소득", "category": "saving", "rate": 0.22},
+    {"segment": "자영업_소상공인", "category": "saving", "rate": 0.4},
+
+    {"segment": "청년_사회초년생", "category": "deposit", "rate": 0.25},
+    {"segment": "청년_중소득", "category": "deposit", "rate": 0.33},
+    {"segment": "3040_직장인", "category": "deposit", "rate": 0.45},
+    {"segment": "저소득_취약차주", "category": "deposit", "rate": 0.2},
+    {"segment": "시니어_은퇴전후", "category": "deposit", "rate": 0.66},
+    {"segment": "시니어_저소득", "category": "deposit", "rate": 0.48},
+    {"segment": "자영업_소상공인", "category": "deposit", "rate": 0.42},
+
+    {"segment": "청년_사회초년생", "category": "card", "rate": 0.63},
+    {"segment": "청년_중소득", "category": "card", "rate": 0.78},
+    {"segment": "3040_직장인", "category": "card", "rate": 0.89},
+    {"segment": "저소득_취약차주", "category": "card", "rate": 0.55},
+    {"segment": "시니어_은퇴전후", "category": "card", "rate": 0.72},
+    {"segment": "시니어_저소득", "category": "card", "rate": 0.51},
+    {"segment": "자영업_소상공인", "category": "card", "rate": 0.85},
+
+    {"segment": "청년_사회초년생", "category": "loan", "rate": 0.35},
+    {"segment": "청년_중소득", "category": "loan", "rate": 0.48},
+    {"segment": "3040_직장인", "category": "loan", "rate": 0.66},
+    {"segment": "3040_생애최초", "category": "loan", "rate": 0.71},
+    {"segment": "저소득_취약차주", "category": "loan", "rate": 0.44},
+    {"segment": "고DSR_차주", "category": "loan", "rate": 0.62},
+    {"segment": "시니어_은퇴전후", "category": "loan", "rate": 0.4},
+    {"segment": "시니어_저소득", "category": "loan", "rate": 0.28},
+    {"segment": "자영업_소상공인", "category": "loan", "rate": 0.69}
+  ]
+}

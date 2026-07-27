@@ -1,0 +1,55 @@
+{
+  "product_id": "DP-2026-002",
+  "name": "시니어 든든 정기예금",
+  "category": "deposit",
+  "issuer": "KB국민은행(가상 신상품)",
+  "summary": "만 55세 이상 대상 12개월 정기예금. 기본 연 3.1%, 연금 수급 실적 및 장기거래 우대 시 최고 연 3.6%.",
+  "intr_rate": 3.1,
+  "intr_rate2": 3.6,
+  "intr_rate_type": "단리",
+  "rate_basis": "고정",
+  "save_trm_months": 12,
+  "min_monthly_manwon": null,
+  "max_monthly_manwon": null,
+  "limit_manwon": 30000,
+  "preferentials": [
+    {
+      "name": "연금 수급 우대",
+      "rate_bonus_pct": 0.3,
+      "requirement": "국민연금·공무원연금 등 연금을 당행 계좌로 3회 이상 수령",
+      "est_attainment_rate": 0.62
+    },
+    {
+      "name": "장기거래 우대",
+      "rate_bonus_pct": 0.2,
+      "requirement": "당행 거래기간 5년 이상",
+      "est_attainment_rate": 0.55
+    }
+  ],
+  "fees": [],
+  "taxation": "이자소득세 15.4%. 만 65세 이상은 비과세종합저축(한도 5천만원) 신청 가능",
+  "early_termination": "중도해지 시 중도해지이율 적용(기본금리의 20~60%)",
+  "risk_notes": [
+    "예금자보호 한도(원금+이자 5천만원)를 초과하는 예치금은 보호되지 않는다",
+    "1년 만기 상품으로 만기 시점 금리 하락 시 재예치 금리가 낮아질 수 있다"
+  ],
+  "target_description": "만 55세 이상, 은퇴 전후 안정 자금 운용 수요층",
+  "target_segments": ["시니어_은퇴전후", "시니어_저소득"],
+  "clauses": [
+    {
+      "id": "약관 제4조",
+      "title": "예금자보호",
+      "text": "이 예금은 예금자보호법에 따라 예금보험공사가 보호하되, 본 은행에 있는 모든 예금보호대상 금융상품의 원금과 소정의 이자를 합하여 1인당 최고 5천만원까지 보호한다."
+    },
+    {
+      "id": "약관 제6조",
+      "title": "비과세종합저축",
+      "text": "만 65세 이상 등 조세특례제한법상 요건을 충족하는 고객은 한도 내에서 비과세종합저축으로 가입할 수 있다."
+    },
+    {
+      "id": "약관 제8조",
+      "title": "만기 후 이율",
+      "text": "만기일 이후 해지하지 않은 예금은 만기 후 이율(기본금리의 20~50%)을 적용한다."
+    }
+  ]
+}
