@@ -1,8 +1,8 @@
 {
   "_meta": {
     "purpose": "세그먼트×상품군 실제 보유율 벤치마크. 시뮬레이션 가입의향률과 대조해 순위상관·MAE를 산출한다.",
-    "source": "통계청 가계금융복지조사 및 금융권 공표 통계 기반 근사치",
-    "caveat": "PoC용 근사값이다. KOSIS 오픈API로 최신 수치를 받아 교체할 것. '보유율'과 '가입의향률'은 정의가 다르므로 절대값 일치보다 세그먼트 간 순위 일치(Spearman)를 1차 지표로 본다.",
+    "source": "일부는 국가데이터처 「2025년 가계금융복지조사」 부록 통계표(연령대별·소득분위별 부채 보유가구 비율)에서 직접 산출, 나머지는 여전히 근사치",
+    "caveat": "loan 카테고리 중 나이 기준으로만 정의된 세그먼트(청년_사회초년생, 청년_중소득, 3040_직장인, 3040_생애최초, 시니어_은퇴전후)는 원자료의 연령대별 '부채 보유가구 비율'(2025년 3월말 기준)로 교체했다. 이 표는 saving/deposit/card 상품군을 따로 구분하지 않고(저축액 보유율이 전 연령대 99~100%로 사실상 무의미), 대출(부채) 보유율만 유의미하게 갈린다 — 그래서 saving/deposit/card는 여전히 PoC 근사값이다. 고DSR_차주 세그먼트는 정의상(dsr_min_pct=30) 이미 부채를 보유한 사람만 포함하므로 loan 보유율이 개념적으로 1.0에 가까워야 하지만, 여기 남은 0.62는 인구 전체 소득분위 평균을 쓴 잠정치이며 세그먼트 정의와 불일치가 있다는 걸 인지하고 있다. 저소득_취약차주·시니어_저소득·자영업_소상공인은 소득분위 매핑이나 직업 기준이라 이 원자료의 연령대 표와 정확히 안 맞아 근사치로 남겼다. '보유율'과 '가입의향률'은 정의가 다르므로 절대값 일치보다 세그먼트 간 순위 일치(Spearman)를 1차 지표로 본다.",
     "unit": "비율(0~1)"
   },
   "holding_rates": [
@@ -31,13 +31,13 @@
     {"segment": "시니어_저소득", "category": "card", "rate": 0.51},
     {"segment": "자영업_소상공인", "category": "card", "rate": 0.85},
 
-    {"segment": "청년_사회초년생", "category": "loan", "rate": 0.35},
-    {"segment": "청년_중소득", "category": "loan", "rate": 0.48},
-    {"segment": "3040_직장인", "category": "loan", "rate": 0.66},
-    {"segment": "3040_생애최초", "category": "loan", "rate": 0.71},
-    {"segment": "저소득_취약차주", "category": "loan", "rate": 0.44},
+    {"segment": "청년_사회초년생", "category": "loan", "rate": 0.502},
+    {"segment": "청년_중소득", "category": "loan", "rate": 0.596},
+    {"segment": "3040_직장인", "category": "loan", "rate": 0.713},
+    {"segment": "3040_생애최초", "category": "loan", "rate": 0.713},
+    {"segment": "저소득_취약차주", "category": "loan", "rate": 0.413},
     {"segment": "고DSR_차주", "category": "loan", "rate": 0.62},
-    {"segment": "시니어_은퇴전후", "category": "loan", "rate": 0.4},
+    {"segment": "시니어_은퇴전후", "category": "loan", "rate": 0.506},
     {"segment": "시니어_저소득", "category": "loan", "rate": 0.28},
     {"segment": "자영업_소상공인", "category": "loan", "rate": 0.69}
   ]

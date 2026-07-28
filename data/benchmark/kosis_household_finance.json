@@ -1,9 +1,9 @@
 {
   "_meta": {
-    "source": "통계청·금융감독원·한국은행 「가계금융복지조사」 공표치 참고 (연령대별 평균)",
+    "source": "국가데이터처(구 통계청) 「2025년 가계금융복지조사 결과」 부록 통계표 (2025.12.4 발표, 2025년 3월말 기준 자산·부채 / 2024년 기준 소득) — 통계표1~10, 가구주 연령대별 항목에서 직접 집계",
     "unit": "만원",
-    "caveat": "PoC용 근사 파라미터다. 실제 제출·검증 시 KOSIS 오픈API(fdm.data.kosis)로 최신 수치를 받아 이 파일을 교체할 것. 개별 페르소나 수치는 이 평균·변동계수로부터 로그정규 근사로 합성한 값이며 실제 개인이 아니다.",
-    "vintage": "2024년 조사 기준 근사"
+    "caveat": "by_age_band의 income_mean_manwon·fin_assets_mean_manwon·real_assets_mean_manwon·debt_mean_manwon·debt_holder_ratio는 공식 발표 원자료에서 산출한 실측 평균값이다. cv(변동계수)는 원자료가 표준편차를 제공하지 않아, 평균과 중앙값의 비율로부터 로그정규분포를 가정해 역산한 근사치다(부채는 보유가구 기준 평균·중앙값으로 환산 후 계산). income_quintile_cutoffs_manwon, occupation_multiplier, annual_debt_service_rate, consumption_ratio_by_band, region_population_share, age_band_share_adult는 아직 이 원자료로 교체되지 않은 PoC용 근사치다. 개별 페르소나 수치는 이 파라미터로부터 로그정규 근사로 합성한 값이며 실제 개인이 아니다.",
+    "vintage": "2025년 12월 발표 (자산·부채: 2025년 3월말 기준 / 소득: 2024년 기준) — 2026년 조사는 2026.3월 시작, 결과는 2026년 12월 발표 예정이라 아직 미공표"
   },
   "income_quintile_cutoffs_manwon": [2300, 4200, 6400, 9600],
   "annual_debt_service_rate": 0.11,
@@ -39,59 +39,59 @@
   },
   "by_age_band": {
     "20대": {
-      "income_mean_manwon": 3600,
-      "income_cv": 0.55,
-      "fin_assets_mean_manwon": 4200,
-      "fin_assets_cv": 1.1,
-      "real_assets_mean_manwon": 6500,
-      "real_assets_cv": 1.6,
-      "debt_mean_manwon": 4200,
-      "debt_cv": 1.2,
-      "debt_holder_ratio": 0.52
+      "income_mean_manwon": 4508.6,
+      "income_cv": 0.596,
+      "fin_assets_mean_manwon": 8843.1,
+      "fin_assets_cv": 1.357,
+      "real_assets_mean_manwon": 6656.6,
+      "real_assets_cv": 3.175,
+      "debt_mean_manwon": 4703.3,
+      "debt_cv": 0.89,
+      "debt_holder_ratio": 0.502
     },
     "30대": {
-      "income_mean_manwon": 6800,
-      "income_cv": 0.5,
-      "fin_assets_mean_manwon": 11500,
-      "fin_assets_cv": 0.95,
-      "real_assets_mean_manwon": 26000,
-      "real_assets_cv": 1.2,
-      "debt_mean_manwon": 10200,
-      "debt_cv": 1.0,
-      "debt_holder_ratio": 0.71
+      "income_mean_manwon": 7385.5,
+      "income_cv": 0.641,
+      "fin_assets_mean_manwon": 14103.8,
+      "fin_assets_cv": 1.134,
+      "real_assets_mean_manwon": 21854.4,
+      "real_assets_cv": 1.32,
+      "debt_mean_manwon": 10898.5,
+      "debt_cv": 1.079,
+      "debt_holder_ratio": 0.69
     },
     "40대": {
-      "income_mean_manwon": 8100,
-      "income_cv": 0.5,
-      "fin_assets_mean_manwon": 13200,
-      "fin_assets_cv": 1.0,
-      "real_assets_mean_manwon": 44000,
-      "real_assets_cv": 1.1,
-      "debt_mean_manwon": 12000,
-      "debt_cv": 1.0,
-      "debt_holder_ratio": 0.7
+      "income_mean_manwon": 9332.5,
+      "income_cv": 0.657,
+      "fin_assets_mean_manwon": 16400.9,
+      "fin_assets_cv": 1.661,
+      "real_assets_mean_manwon": 46313.2,
+      "real_assets_cv": 1.084,
+      "debt_mean_manwon": 14324.8,
+      "debt_cv": 1.462,
+      "debt_holder_ratio": 0.735
     },
     "50대": {
-      "income_mean_manwon": 8600,
-      "income_cv": 0.55,
-      "fin_assets_mean_manwon": 15000,
-      "fin_assets_cv": 1.05,
-      "real_assets_mean_manwon": 45000,
-      "real_assets_cv": 1.1,
-      "debt_mean_manwon": 10500,
-      "debt_cv": 1.05,
-      "debt_holder_ratio": 0.63
+      "income_mean_manwon": 9416.4,
+      "income_cv": 0.675,
+      "fin_assets_mean_manwon": 16506.7,
+      "fin_assets_cv": 1.776,
+      "real_assets_mean_manwon": 49698.4,
+      "real_assets_cv": 1.189,
+      "debt_mean_manwon": 11044.1,
+      "debt_cv": 1.958,
+      "debt_holder_ratio": 0.67
     },
     "60대이상": {
-      "income_mean_manwon": 4700,
-      "income_cv": 0.7,
-      "fin_assets_mean_manwon": 8300,
-      "fin_assets_cv": 1.2,
-      "real_assets_mean_manwon": 40000,
-      "real_assets_cv": 1.1,
-      "debt_mean_manwon": 6200,
-      "debt_cv": 1.2,
-      "debt_holder_ratio": 0.42
+      "income_mean_manwon": 5767.2,
+      "income_cv": 1.05,
+      "fin_assets_mean_manwon": 11235.8,
+      "fin_assets_cv": 2.516,
+      "real_assets_mean_manwon": 48859.7,
+      "real_assets_cv": 1.385,
+      "debt_mean_manwon": 6504.2,
+      "debt_cv": 2.706,
+      "debt_holder_ratio": 0.451
     }
   },
   "region_population_share": {
