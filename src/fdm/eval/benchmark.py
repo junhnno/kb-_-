@@ -70,7 +70,15 @@ class CaseOutcome(BaseModel):
     pred: Suitability
     exact: bool
     risk_correct: bool = Field(description="위험(warn/fail) 대 정상(pass) 이분류 일치")
-    principle_recall: float = Field(description="정답 위반원칙 중 예측이 잡아낸 비율")
+    principle_recall: float = Field(
+        description="정답 위반원칙 중 예측이 잡아낸 비율 (시드별 재현율의 평균)"
+    )
+    principle_recall_union: float = Field(
+        default=0.0, description="시드 합집합 기준 재현율 (참고용 상한)"
+    )
+    judge_schema_repairs: int = Field(
+        default=0, description="심판 응답 스키마 교정이 필요했던 횟수"
+    )
     confidence: float
     intent_mean: float
     n_llm_calls: int
@@ -84,6 +92,8 @@ class ArmScore(BaseModel):
     risk_accuracy: float
     macro_f1: float
     principle_recall: float
+    principle_recall_union: float = 0.0
+    judge_schema_repairs: int = 0
     mean_confidence: float
     total_llm_calls: int
     total_elapsed_sec: float
@@ -178,9 +188,22 @@ def run_case_arm(
         pred=pred,
         exact=pred == case.label,
         risk_correct=(pred in RISKY) == (case.label in RISKY),
+        # 시드별로 각각 재현율을 구한 뒤 평균한다. 여러 시드의 위반원칙을 합집합으로
+        # 모으면 "시드를 늘릴수록 재현율이 올라가는" 지표가 되어 arm 간 비교가 왜곡된다.
         principle_recall=round(
-            _principle_recall(case.principle, [x for r in runs for x in r.verdict.violated_principles]), 3
+            statistics.fmean(
+                _principle_recall(case.principle, r.verdict.violated_principles) for r in runs
+            ),
+            3,
         ),
+        # 참고용: 합집합 기준(=시드 중 한 번이라도 잡았는가). 상한을 보여준다.
+        principle_recall_union=round(
+            _principle_recall(
+                case.principle, [x for r in runs for x in r.verdict.violated_principles]
+            ),
+            3,
+        ),
+        judge_schema_repairs=sum(1 for r in runs if r.judge_schema_repaired),
         confidence=cr.confidence,
         intent_mean=cr.intent_mean,
         n_llm_calls=n_calls,
@@ -226,6 +249,10 @@ def run_ablation(
                 risk_accuracy=round(sum(o.risk_correct for o in outcomes) / len(outcomes), 3),
                 macro_f1=_macro_f1(pairs),
                 principle_recall=round(statistics.fmean(o.principle_recall for o in outcomes), 3),
+                principle_recall_union=round(
+                    statistics.fmean(o.principle_recall_union for o in outcomes), 3
+                ),
+                judge_schema_repairs=sum(o.judge_schema_repairs for o in outcomes),
                 mean_confidence=round(statistics.fmean(o.confidence for o in outcomes), 3),
                 total_llm_calls=sum(o.n_llm_calls for o in outcomes),
                 total_elapsed_sec=round(sum(o.elapsed_sec for o in outcomes), 1),
