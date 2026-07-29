@@ -18,6 +18,31 @@ PRINCIPLES = [
     "광고규제",
 ]
 
+# 심판 응답의 필수 키. 각 튜플은 허용 별칭 묶음이며, 하나라도 있으면 충족으로 본다.
+# llm.chat_json(required_keys=...)이 이걸로 검사해 누락 시 재요청한다.
+REQUIRED_VERDICT_KEYS: tuple[tuple[str, ...], ...] = (
+    ("적합성", "판정", "suitability"),
+    ("가입의향점수", "intent_score", "score"),
+    ("근거", "evidence"),
+)
+
+# 백엔드에 구조화 출력으로 강제할 JSON 스키마.
+# Ollama는 format에, vLLM은 response_format={"type":"json_schema"}에 실린다.
+VERDICT_JSON_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "적합성": {"type": "string", "enum": ["pass", "warn", "fail"]},
+        "가입의향점수": {"type": "integer", "minimum": 0, "maximum": 100},
+        "위반원칙": {"type": "array", "items": {"type": "string", "enum": PRINCIPLES}},
+        "근거": {"type": "array", "items": {"type": "string"}},
+        "위험요인": {"type": "array", "items": {"type": "string"}},
+        "개선권고": {"type": "array", "items": {"type": "string"}},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "요약": {"type": "string"},
+    },
+    "required": ["적합성", "가입의향점수", "위반원칙", "근거", "위험요인", "요약"],
+}
+
 # 인용 패턴: [약관 제5조], [FCPA-19], [CASE-001], [월 여유자금 37만원], 제19조, 40%
 _CITATION_PATTERNS = [
     re.compile(r"\[[^\]]{2,60}\]"),
@@ -94,21 +119,39 @@ class Verdict(BaseModel):
             conf = 0.5
 
         def as_list(v: Any) -> list[str]:
+            """리스트를 기대하지만 문자열·딕셔너리로 오는 경우까지 흡수한다.
+
+            심판이 `"근거": {"광고표시": "...", "설명의무": "..."}` 처럼 딕셔너리로
+            답하는 일이 실제로 관측됐다. 이때 `[str(x) for x in v]`는 **키만** 남겨
+            내용을 버리므로, `키: 값` 형태로 평탄화한다.
+            """
             if v is None:
                 return []
             if isinstance(v, str):
                 return [v]
-            return [str(x) for x in v]
+            if isinstance(v, dict):
+                return [f"{k}: {val}" for k, val in v.items()]
+            if isinstance(v, list):
+                out: list[str] = []
+                for x in v:
+                    if isinstance(x, dict):
+                        out += [f"{k}: {val}" for k, val in x.items()]
+                    else:
+                        out.append(str(x))
+                return out
+            return [str(v)]
 
         return cls(
-            suitability=normalize_suitability(pick("적합성", "suitability", default="warn")),
+            suitability=normalize_suitability(
+                pick("적합성", "판정", "suitability", default="warn")
+            ),
             intent_score=max(0, min(100, score)),
             violated_principles=as_list(pick("위반원칙", "violated_principles", default=[])),
             evidence=as_list(pick("근거", "evidence", default=[])),
             risks=as_list(pick("위험요인", "risks", default=[])),
             recommendations=as_list(pick("개선권고", "recommendations", default=[])),
             self_confidence=max(0.0, min(1.0, conf)),
-            summary=str(pick("요약", "summary", default="")),
+            summary=str(pick("요약", "판단요지", "summary", default="")),
         )
 
 
@@ -126,6 +169,10 @@ class DebateResult(BaseModel):
     persona_intent_final: int | None = None
     grounding_doc_ids: list[str] = Field(default_factory=list)
     ungrounded_turns: int = 0
+    judge_schema_repaired: bool = Field(
+        default=False,
+        description="심판이 요구 스키마를 어겨 교정 재요청이 필요했는가 (품질 지표)",
+    )
     elapsed_sec: float = 0.0
 
     def transcript(self) -> str:

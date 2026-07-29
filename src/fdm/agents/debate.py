@@ -20,7 +20,15 @@ from ..personas.schema import Persona
 from ..products.schema import Product
 from ..rag.retriever import Retriever, get_retriever
 from . import prompts as P
-from .schema import DebateResult, Turn, Verdict, count_citations, is_grounded
+from .schema import (
+    REQUIRED_VERDICT_KEYS,
+    VERDICT_JSON_SCHEMA,
+    DebateResult,
+    Turn,
+    Verdict,
+    count_citations,
+    is_grounded,
+)
 
 
 @dataclass
@@ -159,8 +167,11 @@ def run_debate(
         user=P.judge_user(ctx, transcript),
         temperature=cfg.temperature_judge,
         seed=seed + 44,
+        json_schema=VERDICT_JSON_SCHEMA,
+        required_keys=REQUIRED_VERDICT_KEYS,
     )
     verdict = Verdict.from_json(judge_obj)
+    judge_repaired = client.last_json_repaired
     turns.append(
         Turn(
             role="judge",
@@ -185,6 +196,7 @@ def run_debate(
         persona_intent_final=_persona_intent(t_p2.content),
         grounding_doc_ids=[h.doc.doc_id for h in hits],
         ungrounded_turns=sum(1 for t in turns if not t.grounded),
+        judge_schema_repaired=judge_repaired,
         elapsed_sec=round(time.time() - t0, 2),
     )
 
@@ -223,8 +235,11 @@ def single_shot(
         user=P.single_shot_user(ctx),
         temperature=cfg.temperature_judge,
         seed=seed,
+        json_schema=VERDICT_JSON_SCHEMA,
+        required_keys=REQUIRED_VERDICT_KEYS,
     )
     verdict = Verdict.from_json(obj)
+    repaired = client.last_json_repaired
     turn = Turn(
         role="single",
         content=verdict.summary or str(obj)[:500],
@@ -244,5 +259,6 @@ def single_shot(
         verdict=verdict,
         grounding_doc_ids=doc_ids,
         ungrounded_turns=0 if turn.grounded else 1,
+        judge_schema_repaired=repaired,
         elapsed_sec=round(time.time() - t0, 2),
     )

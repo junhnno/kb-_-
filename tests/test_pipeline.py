@@ -5,7 +5,14 @@ from __future__ import annotations
 import pytest
 
 from fdm.agents.debate import run_debate, single_shot
-from fdm.agents.schema import Verdict, count_citations, is_grounded, normalize_suitability
+from fdm.agents.schema import (
+    PRINCIPLES,
+    REQUIRED_VERDICT_KEYS,
+    Verdict,
+    count_citations,
+    is_grounded,
+    normalize_suitability,
+)
 from fdm.config import SETTINGS
 from fdm.eval.benchmark import load_cases, run_ablation
 from fdm.eval.confidence import aggregate
@@ -97,6 +104,98 @@ def test_retrieval_excludes_ids():
 def test_extract_json_variants(raw):
     obj = extract_json(raw)
     assert obj is not None and "적합성" in obj
+
+
+def test_chat_json_requires_keys_and_repairs(monkeypatch):
+    """심판이 다른 스키마로 답하면 조용히 기본값으로 넘기지 말고 재요청해야 한다."""
+    from fdm.llm import LLMClient, LLMError
+
+    client = LLMClient()
+    calls: list[str] = []
+
+    # 1차: 스키마 위반(판정/판단요지), 2차: 요구 스키마 준수
+    replies = [
+        '{"판정": "warn", "판단요지": "설명 부족"}',
+        '{"적합성": "warn", "가입의향점수": 35, "근거": ["[FCPA-19] 설명의무"]}',
+    ]
+
+    def fake_chat(**kwargs):
+        calls.append(kwargs["user"][:20])
+        from fdm.llm import LLMResponse
+
+        return LLMResponse(text=replies[len(calls) - 1], model="fake")
+
+    monkeypatch.setattr(client, "chat", fake_chat)
+    obj = client.chat_json(
+        role="judge", system="s", user="u", required_keys=REQUIRED_VERDICT_KEYS
+    )
+    assert len(calls) == 2, "필수 키 누락 시 교정 재요청이 있어야 한다"
+    assert obj["가입의향점수"] == 35
+    assert client.last_json_repaired is True
+
+    # 2회 시도 후에도 스키마를 못 지키면 예외를 던진다 (기본값으로 넘어가면 안 된다)
+    calls.clear()
+    replies[:] = ['{"판정": "warn"}', '{"판정": "warn"}']
+    monkeypatch.setattr(client, "chat", fake_chat)
+    with pytest.raises(LLMError, match="스키마 검증 실패"):
+        client.chat_json(role="judge", system="s", user="u", required_keys=REQUIRED_VERDICT_KEYS)
+
+
+def test_verdict_absorbs_dict_evidence():
+    """근거가 리스트 대신 딕셔너리로 와도 내용을 잃지 않아야 한다."""
+    v = Verdict.from_json(
+        {
+            "판정": "warn",
+            "가입의향점수": 40,
+            "근거": {"광고표시": "최고금리만 강조", "설명의무": "중도해지 설명 부족"},
+            "판단요지": "광고 개선 권고",
+        }
+    )
+    assert v.suitability == "warn"  # "판정" 별칭 인식
+    assert v.summary == "광고 개선 권고"  # "판단요지" 별칭 인식
+    assert any("최고금리만 강조" in e for e in v.evidence)  # 키만 남지 않았다
+    assert len(v.evidence) == 2
+
+
+def test_mock_judge_fills_principles():
+    """mock이 위반원칙을 채워야 벤치마크 재현율 로직을 LLM 없이 검증할 수 있다."""
+    from fdm.llm import _mock_reply
+
+    seen_nonempty = 0
+    for i in range(12):
+        obj = extract_json(_mock_reply("judge", "sys", f"user{i}", i, 0.7))
+        assert "위반원칙" in obj
+        assert isinstance(obj["위반원칙"], list)
+        assert all(p in PRINCIPLES for p in obj["위반원칙"])
+        if obj["적합성"] == "pass":
+            assert obj["위반원칙"] == [], "적합 판정에 위반원칙이 있으면 모순이다"
+        else:
+            seen_nonempty += 1
+        assert 0.0 <= obj["confidence"] <= 1.0
+        assert obj["개선권고"]
+    assert seen_nonempty > 0
+
+
+def test_debt_capped_by_income_multiple(personas):
+    """무직·학생에게 소득 대비 과도한 부채가 붙지 않아야 한다 (결합분포 보정)."""
+    from fdm.personas.finance import load_kosis_params
+
+    params = load_kosis_params()
+    caps = params["debt_cap_income_multiple_by_occupation"]
+    checked = 0
+    for p in personas:
+        f = p.finance
+        if f is None or f.debt_manwon == 0:
+            continue
+        multiple = params["debt_cap_income_multiple_default"]
+        for kw, m in caps.items():
+            if kw in p.occupation:
+                multiple = m
+                break
+        cap = max(params["debt_cap_floor_manwon"], int(f.annual_income_manwon * multiple))
+        assert f.debt_manwon <= cap, f"{p.persona_id} {p.occupation}: 부채 {f.debt_manwon} > 상한 {cap}"
+        checked += 1
+    assert checked > 20, "부채 보유 페르소나가 너무 적어 검증이 무의미하다"
 
 
 def test_verdict_normalization():

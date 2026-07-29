@@ -33,6 +33,9 @@ class LLMError(RuntimeError):
 class LLMClient:
     def __init__(self, settings: Settings | None = None):
         self.s = settings or SETTINGS
+        # chat_json이 스키마 교정 재요청을 했는지 (호출부가 리포트에 기록한다)
+        self.last_json_repaired = False
+        self.json_repair_count = 0
 
     # ------------------------------------------------------------------ public
     def model_for(self, role: str) -> str:
@@ -49,6 +52,7 @@ class LLMClient:
         seed: int | None = None,
         json_mode: bool = False,
         max_tokens: int | None = None,
+        json_schema: dict[str, Any] | None = None,
     ) -> LLMResponse:
         model = self.model_for(role)
         if self.s.backend == "mock":
@@ -65,6 +69,7 @@ class LLMClient:
                 seed=seed,
                 json_mode=json_mode,
                 max_tokens=max_tokens,
+                json_schema=json_schema,
             )
         payload: dict[str, Any] = {
             "model": model,
@@ -78,7 +83,13 @@ class LLMClient:
         }
         if seed is not None:
             payload["seed"] = seed
-        if json_mode:
+        if json_schema is not None:
+            # vLLM 구조화 출력. 스키마를 지키도록 디코딩 단계에서 강제한다.
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "verdict", "schema": json_schema},
+            }
+        elif json_mode:
             payload["response_format"] = {"type": "json_object"}
         if not self.s.think:
             # vLLM: Qwen3·EXAONE 등 하이브리드 추론 모델의 사고 모드를 끈다.
@@ -118,6 +129,7 @@ class LLMClient:
         seed: int | None,
         json_mode: bool,
         max_tokens: int | None,
+        json_schema: dict[str, Any] | None = None,
     ) -> LLMResponse:
         """Ollama 네이티브 /api/chat.
 
@@ -146,7 +158,9 @@ class LLMClient:
             "options": options,
             "keep_alive": self.s.keep_alive,  # 매 호출마다 모델을 다시 올리지 않는다
         }
-        if json_mode:
+        if json_schema is not None:
+            payload["format"] = json_schema  # Ollama 구조화 출력: 스키마를 그대로 받는다
+        elif json_mode:
             payload["format"] = "json"
 
         try:
@@ -178,26 +192,74 @@ class LLMClient:
             text = _strip_think(data.get("message", {}).get("content") or "")
         return LLMResponse(text=text, model=model, raw=data)
 
-    def chat_json(self, **kwargs: Any) -> dict[str, Any]:
-        """JSON 객체를 강제 파싱. 실패 시 1회 교정 재시도."""
+    def chat_json(
+        self,
+        *,
+        required_keys: tuple[tuple[str, ...], ...] = (),
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """JSON 객체를 파싱하고 **필수 키까지 검증**한다.
+
+        `required_keys`는 별칭 묶음의 튜플이다. 예: `(("적합성","판정"),)`
+        하나의 묶음에서 아무 키도 없으면 누락으로 보고 교정을 재요청한다.
+
+        키 검증이 없으면 심판이 다른 스키마로 답했을 때
+        `Verdict.from_json`이 조용히 기본값(가입의향 50 등)으로 채워버린다.
+        실제로 관측된 사고이므로 여기서 막는다.
+        """
         kwargs.setdefault("json_mode", True)
+        self.last_json_repaired = False
+
         res = self.chat(**kwargs)
         obj = extract_json(res.text)
-        if obj is not None:
+        missing = _missing_key_groups(obj, required_keys)
+        if obj is not None and not missing:
             return obj
+
+        # 1차 교정: 무엇이 문제인지 구체적으로 알려준다
+        problem = (
+            "유효한 JSON 객체가 아니다"
+            if obj is None
+            else f"필수 키가 누락됐다: {['|'.join(g) for g in missing]}"
+        )
         repair = dict(kwargs)
+        repair["temperature"] = 0.0
         repair["user"] = (
-            "다음 텍스트를 유효한 JSON 객체 하나로만 다시 출력하라. 설명·코드펜스 금지.\n\n"
+            f"직전 응답에 문제가 있다: {problem}\n"
+            "아래 텍스트의 내용을 유지하되, 요구된 키를 모두 가진 JSON 객체 하나만 출력하라. "
+            "설명·코드펜스 금지. 키 이름을 임의로 바꾸지 말라.\n"
+            f"필수 키: {[g[0] for g in required_keys] or '(스키마 참조)'}\n\n"
             + res.text[:4000]
         )
-        repair["temperature"] = 0.0
-        obj = extract_json(self.chat(**repair).text)
-        if obj is None:
-            raise LLMError(f"JSON 파싱 실패: {res.text[:300]}")
-        return obj
+        res2 = self.chat(**repair)
+        obj2 = extract_json(res2.text)
+        missing2 = _missing_key_groups(obj2, required_keys)
+        if obj2 is not None and not missing2:
+            self.last_json_repaired = True
+            self.json_repair_count += 1
+            return obj2
+
+        # 2차 교정 실패 → 조용히 기본값으로 넘기지 않고 예외를 던진다
+        raise LLMError(
+            f"JSON 스키마 검증 실패 (2회 시도). {problem}\n"
+            f"1차 응답: {res.text[:200]}\n2차 응답: {res2.text[:200]}"
+        )
 
 
 # ---------------------------------------------------------------- json helpers
+def _missing_key_groups(
+    obj: dict[str, Any] | None, required_keys: tuple[tuple[str, ...], ...]
+) -> list[tuple[str, ...]]:
+    """별칭 묶음 중 어느 키도 없고 값이 빈 묶음들을 돌려준다."""
+    if obj is None:
+        return list(required_keys)
+    return [
+        group
+        for group in required_keys
+        if not any(k in obj and obj[k] not in (None, "", [], {}) for k in group)
+    ]
+
+
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
@@ -271,15 +333,31 @@ def _mock_reply(role: str, system: str, user: str, seed: int | None, temperature
 
     if role in {"judge", "single"}:
         verdict = "pass" if score >= 60 else ("warn" if score >= 40 else "fail")
+        # 위반원칙도 실제 모델처럼 채운다. 비워두면 재현율 지표가 항상 0이 되어
+        # 벤치마크 로직을 mock으로 검증할 수 없다.
+        # pass면 위반 없음, 그 외에는 점수 해시로 1~2개를 결정론적으로 고른다.
+        principles = ["적합성", "적정성", "설명의무", "불공정영업금지", "부당권유금지", "광고규제"]
+        if verdict == "pass":
+            violated: list[str] = []
+        else:
+            i = int(_rand01(key, "p1") * len(principles))
+            violated = [principles[i % len(principles)]]
+            if verdict == "fail":  # 부적합이면 두 번째 원칙도 함께
+                j = int(_rand01(key, "p2") * len(principles))
+                if principles[j % len(principles)] not in violated:
+                    violated.append(principles[j % len(principles)])
         return json.dumps(
             {
                 "적합성": verdict,
                 "가입의향점수": score,
+                "위반원칙": violated,
                 "근거": [
                     f"[MOCK] 금소법 제17조(적합성원칙) 대조 결과 score={score}",
                     "[MOCK] 페르소나 소득·부채 대비 납입부담 검토",
                 ],
                 "위험요인": ["[MOCK] 우대금리 조건 미달 가능성", "[MOCK] 중도해지 시 약정금리 미적용"],
+                "개선권고": ["[MOCK] 우대조건 달성률 산출 근거 보완", "[MOCK] 중도해지 불이익 강조 표시"],
+                "confidence": round(0.4 + _rand01(key, "conf") * 0.5, 2),
                 "요약": "[MOCK] 스텁 판정입니다. 실제 LLM 백엔드로 교체하세요.",
             },
             ensure_ascii=False,
