@@ -1,0 +1,292 @@
+{
+ "_meta": {
+  "purpose": "우려 단위 채점용 분류 체계. 적합성 라벨(pass/warn/fail)은 케이스당 1비트뿐이라 '어떤 문제를 짚었는가'를 구분하지 못한다. 금소법 6대 원칙(6분류)도 너무 거칠어 '조항 단위 우려'의 차이를 흡수해버린다.",
+  "scoring": "각 arm의 **위험요인 + 개선권고 + 요약**을 keywords로 매칭한다. `근거(evidence)`는 채점 대상에서 제외한다 — 검색된 문서 원문이 그대로 인용되어 있어, 모델이 제기한 우려가 아닌 참조 문구가 검출되기 때문이다(실측: ELS 케이스에서 GUIDE-RATE-AD 인용문 때문에 '단리 적금 광고 오인'이 검출됨).",
+  "keyword_policy": "중립적 용어가 아니라 **우려를 표현하는 구절**을 키워드로 둔다. 예: '여유자금'(x) → '여유자금 부족'(o). '여유자금 185만원으로 충분하다'는 긍정 진술까지 우려로 잡히는 것을 막는다.",
+  "gold_source": "각 케이스의 facts/decision_gist에서 저자가 부여. dispute_cases.json이 가공 샘플이므로 이 정답도 잠정치다.",
+  "_gold_revision_2026_07": "1차 채점에서 모델이 제기한 우려 중 '사실에 부합하고 중대하나 gold에 없던' 항목을 추가했다. 유효한 우려가 오탐으로 집계되어 precision이 과소 추정되고 있었다. 추가 근거: CASE-003 페르소나 DSR 49.7%·월여유 -81만원(감당능력·DSR 우려 성립), 상품이 변동금리에 감면조건 유지 요구(금리변동·우대조건 우려 성립). CASE-004 월상환액 87만원 > 월여유 49만원. CASE-005 부적정 고지·확인 기록 없음.",
+  "verification_column": "각 우려를 실제로 확인할 데이터원. Phase 2의 '우려 → 검증 데이터원 매핑 테이블' 초안 역할을 겸한다."
+ },
+ "types": [
+  {
+   "id": "affordability",
+   "label": "소득·여유자금 대비 납입/상환 부담",
+   "keywords": [
+    "여유자금 부족",
+    "여유자금을 초과",
+    "여유자금 대비",
+    "납입 부담",
+    "상환 부담",
+    "상환액이 여유",
+    "감당 어려",
+    "감당 불가",
+    "감당하기",
+    "부담스럽",
+    "여력 부족",
+    "납입 여력",
+    "소득 대비 과도",
+    "생활비 압박"
+   ],
+   "verify_with": "사내 세그먼트별 실제 납입 지속률, KOSIS 소득분위별 저축 여력"
+  },
+  {
+   "id": "dsr_overload",
+   "label": "DSR 규제 한도 초과·근접",
+   "keywords": [
+    "DSR",
+    "총부채원리금",
+    "원리금상환비율",
+    "차주단위"
+   ],
+   "verify_with": "차주단위 DSR 산정 결과, 스트레스 DSR 적용 시 한도"
+  },
+  {
+   "id": "preferential_unattainable",
+   "label": "우대조건 달성 곤란",
+   "keywords": [
+    "우대조건 달성",
+    "달성 곤란",
+    "달성 불가",
+    "달성 가능성 낮",
+    "충족 불가",
+    "충족 어려",
+    "조건 미달",
+    "실적 조건",
+    "전월 실적",
+    "우대금리 미적용",
+    "우대금리 적용 어려",
+    "우대조건 충족"
+   ],
+   "verify_with": "사내 급여이체 24개월 유지율, 카드 실적 지속률, 우대금리 실제 적용 비율"
+  },
+  {
+   "id": "rate_display_misleading",
+   "label": "최고금리 위주 표시로 인한 오인",
+   "keywords": [
+    "최고금리만",
+    "최고금리 강조",
+    "최고금리 위주",
+    "표시금리와",
+    "표시금리 대비",
+    "오인",
+    "대표금리",
+    "체감수익률"
+   ],
+   "verify_with": "광고 심의 이력, 유사 상품 민원 사유 분포, 조정례"
+  },
+  {
+   "id": "early_termination_penalty",
+   "label": "중도해지·중도상환 불이익",
+   "keywords": [
+    "중도해지",
+    "중도상환",
+    "해지이율",
+    "만기 전 해지",
+    "중도상환수수료"
+   ],
+   "verify_with": "유사 기간 상품의 실제 해지 곡선, 중도해지 사유 분포"
+  },
+  {
+   "id": "principal_loss_risk",
+   "label": "원금 손실 가능성",
+   "keywords": [
+    "원금 손실",
+    "원금 비보장",
+    "손실 가능",
+    "원금이 줄",
+    "전액 손실",
+    "손실 확대",
+    "원금 보장되지"
+   ],
+   "verify_with": "상품 위험등급, 과거 손실 실현 사례"
+  },
+  {
+   "id": "rate_variability",
+   "label": "변동금리 상승 위험",
+   "keywords": [
+    "변동금리",
+    "금리 상승",
+    "금리 변동",
+    "COFIX",
+    "금리 재산정",
+    "상환액 증가",
+    "스트레스 금리"
+   ],
+   "verify_with": "기준지표 변동 이력, 스트레스 금리 시나리오"
+  },
+  {
+   "id": "fee_hidden",
+   "label": "수수료·연회비 등 비용 부담",
+   "keywords": [
+    "연회비",
+    "수수료 미고지",
+    "수수료 부담",
+    "수수료율",
+    "인지세",
+    "부대비용",
+    "비용 미고지"
+   ],
+   "verify_with": "실제 부과 수수료 통계, 연회비 대비 혜택 회수율"
+  },
+  {
+   "id": "revolving_debt_spiral",
+   "label": "리볼빙·현금서비스 부채 누적",
+   "keywords": [
+    "리볼빙",
+    "일부결제",
+    "이월",
+    "현금서비스",
+    "카드론",
+    "최소결제",
+    "부채 누적"
+   ],
+   "verify_with": "리볼빙 이용자 잔액 추이, 연체 전이율"
+  },
+  {
+   "id": "deposit_protection_limit",
+   "label": "예금자보호 한도 초과",
+   "keywords": [
+    "예금자보호",
+    "보호 한도",
+    "예금보험",
+    "분산 예치",
+    "비보호",
+    "5천만원 초과"
+   ],
+   "verify_with": "고액 예치 고객 분포, 분산 예치 안내 이행률"
+  },
+  {
+   "id": "tying_sale",
+   "label": "끼워팔기·부당 요구",
+   "keywords": [
+    "끼워팔기",
+    "강요",
+    "가입 조건",
+    "의사에 반",
+    "불공정영업",
+    "가입 요구",
+    "구속성",
+    "연계 강권"
+   ],
+   "verify_with": "대출 실행 전후 타 상품 가입률, 민원 유형"
+  },
+  {
+   "id": "maturity_refinance_risk",
+   "label": "만기 일시상환·기한연장 거절 위험",
+   "keywords": [
+    "일시상환",
+    "기한연장",
+    "연장 거절",
+    "차환",
+    "만기 전액"
+   ],
+   "verify_with": "기한연장 승인율, 매출 변동 구간별 연장 거절률"
+  },
+  {
+   "id": "suitability_profile_mismatch",
+   "label": "투자성향·경험 대비 부적합",
+   "keywords": [
+    "투자성향",
+    "안정형",
+    "투자 경험 없",
+    "위험등급",
+    "성향 진단",
+    "재진단",
+    "성향 부적합",
+    "고난도"
+   ],
+   "verify_with": "투자성향 진단 결과 분포, 재진단 이력"
+  },
+  {
+   "id": "explanation_insufficient",
+   "label": "설명의무·중요사항 고지 부족",
+   "keywords": [
+    "설명의무",
+    "설명 부족",
+    "설명하지",
+    "설명 누락",
+    "미고지",
+    "중요사항",
+    "안내 미흡",
+    "고지 의무",
+    "인지하지 못"
+   ],
+   "verify_with": "설명 확인서·녹취 이행률, 민원 중 설명 부족 사유 비중"
+  },
+  {
+   "id": "senior_vulnerability",
+   "label": "고령자 취약성·보호절차",
+   "keywords": [
+    "고령",
+    "숙려",
+    "녹취",
+    "노인"
+   ],
+   "verify_with": "고령자 대상 판매 이력, 숙려제도 이행률"
+  }
+ ],
+ "gold": {
+  "CASE-001": [
+   "principal_loss_risk",
+   "suitability_profile_mismatch",
+   "senior_vulnerability",
+   "explanation_insufficient"
+  ],
+  "CASE-002": [
+   "preferential_unattainable",
+   "rate_display_misleading"
+  ],
+  "CASE-003": [
+   "tying_sale",
+   "dsr_overload",
+   "affordability",
+   "rate_variability",
+   "preferential_unattainable"
+  ],
+  "CASE-004": [
+   "rate_variability",
+   "explanation_insufficient",
+   "affordability"
+  ],
+  "CASE-005": [
+   "dsr_overload",
+   "affordability",
+   "explanation_insufficient"
+  ],
+  "CASE-006": [],
+  "CASE-007": [
+   "revolving_debt_spiral",
+   "fee_hidden",
+   "explanation_insufficient"
+  ],
+  "CASE-008": [],
+  "CASE-009": [
+   "early_termination_penalty",
+   "explanation_insufficient"
+  ],
+  "CASE-010": [
+   "deposit_protection_limit",
+   "explanation_insufficient"
+  ],
+  "CASE-011": [
+   "maturity_refinance_risk",
+   "rate_variability",
+   "explanation_insufficient"
+  ],
+  "CASE-012": [
+   "preferential_unattainable",
+   "affordability",
+   "fee_hidden"
+  ],
+  "CASE-013": [],
+  "CASE-014": [],
+  "CASE-015": [],
+  "CASE-016": [],
+  "CASE-017": [],
+  "CASE-018": [],
+  "CASE-019": [],
+  "CASE-020": [],
+  "CASE-021": [],
+  "CASE-022": []
+ }
+}

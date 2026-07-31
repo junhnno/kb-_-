@@ -179,10 +179,12 @@ def simulate(
 
 @app.command()
 def ablation(
-    seeds: int = typer.Option(2), limit: Optional[int] = typer.Option(None, help="사례 수 제한")
+    seeds: int = typer.Option(2),
+    limit: Optional[int] = typer.Option(None, help="사례 수 제한"),
+    seed_base: int = typer.Option(7000, help="시드 시작값. 바꿔서 재실행하면 표집 노이즈를 잴 수 있다"),
 ) -> None:
     """분쟁조정 정답셋으로 단발 vs 디베이트 적중률을 비교한다."""
-    rep = run_ablation(n_seeds=seeds, limit=limit)
+    rep = run_ablation(n_seeds=seeds, limit=limit, seed_base=seed_base)
     t = Table("조건", "적중률", "위험탐지", "macroF1", "위반원칙재현율", "LLM호출")
     for a in rep.arms:
         t.add_row(a.arm, f"{a.accuracy:.1%}", f"{a.risk_accuracy:.1%}", f"{a.macro_f1:.3f}",

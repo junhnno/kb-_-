@@ -13,8 +13,10 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from ..config import SETTINGS
+from ..facts import apply_severity_floors, build_fact_pack, screen_typed_concerns
 from ..llm import LLMClient, extract_json
 from ..personas.schema import Persona
 from ..products.schema import Product
@@ -28,16 +30,29 @@ from .schema import (
     Verdict,
     count_citations,
     is_grounded,
+    stamp_sources,
 )
 
 
 @dataclass
 class DebateConfig:
-    temperature_debater: float = 0.8
-    temperature_judge: float = 0.2
+    # 기본값을 설정(.env)에서 읽는다. FDM_TEMP_DEBATER로 온도를 쓸어보며 측정할 수 있다.
+    temperature_debater: float = field(default_factory=lambda: SETTINGS.temp_debater)
+    temperature_judge: float = field(default_factory=lambda: SETTINGS.temp_judge)
     k_docs: int = 6
     use_dense: bool = False
+    # 검색 대상 문서 종류. None이면 전체(법조문·가이드라인·조정례).
+    #
+    # 조정례 문서는 제목에 `— 판정 {label}`이, 본문에 판단요지가 들어 있다. 평가 시
+    # 자기 사례만 제외되므로 **이웃 사례의 정답 라벨이 프롬프트에 노출된다.**
+    # 실측: 검색 결과의 72%가 조정례이고 그중 74%가 fail/warn이며, 깨끗한 대출
+    # 케이스(CASE-019/020)는 검색된 조정례 3건이 전부 fail이었다.
+    # ("law", "guideline")로 두면 조정례를 빼고 조문만 근거로 쓴다 — 이 노출이
+    # 과잉경고의 원인인지 분리해 재기 위한 장치다.
+    retrieve_kinds: tuple[str, ...] | None = None
     enforce_grounding: bool = True  # 근거 없는 발화는 1회 재요청
+    use_fact_pack: bool = True  # 파생 지표를 계산해 주입 (사전 예방)
+    screen_contradictions: bool = True  # 계산값과 모순되는 우려를 기각 (사후 차단)
 
 
 def _query_for(product: Product, persona: Persona) -> str:
@@ -112,6 +127,7 @@ def run_debate(
     client: LLMClient | None = None,
     retriever: Retriever | None = None,
     exclude_doc_ids: set[str] | None = None,
+    situation: str = "",
 ) -> DebateResult:
     cfg = config or DebateConfig()
     client = client or LLMClient()
@@ -119,12 +135,22 @@ def run_debate(
     t0 = time.time()
 
     hits = retriever.retrieve(
-        _query_for(product, persona), k=cfg.k_docs, exclude_ids=exclude_doc_ids
+        _query_for(product, persona),
+        k=cfg.k_docs,
+        kinds=cfg.retrieve_kinds,
+        exclude_ids=exclude_doc_ids,
     )
     grounding = (
         "\n".join(f"{i+1}. {h.doc.cite()}" for i, h in enumerate(hits)) or "(검색된 근거 없음)"
     )
-    ctx = P.context_block(product.prompt_block(), persona.prompt_block(), grounding)
+    facts = build_fact_pack(product, persona) if cfg.use_fact_pack else None
+    ctx = P.context_block(
+        product.prompt_block(),
+        persona.prompt_block(),
+        grounding,
+        facts.prompt_block() if facts else "",
+        situation,
+    )
 
     turns: list[Turn] = []
 
@@ -143,7 +169,7 @@ def run_debate(
     turns.append(t_p1)
 
     t_skp = _turn(
-        client, "skeptic", P.SKEPTIC_SYSTEM, P.skeptic_user(ctx, t_adv.content, t_p1.content),
+        client, "skeptic", P.skeptic_system(), P.skeptic_user(ctx, t_adv.content, t_p1.content),
         temperature=cfg.temperature_debater, seed=seed + 22,
         enforce_grounding=cfg.enforce_grounding,
     )
@@ -163,7 +189,7 @@ def run_debate(
     )
     judge_obj = client.chat_json(
         role="judge",
-        system=P.JUDGE_SYSTEM,
+        system=P.judge_system(),
         user=P.judge_user(ctx, transcript),
         temperature=cfg.temperature_judge,
         seed=seed + 44,
@@ -172,6 +198,15 @@ def run_debate(
     )
     verdict = Verdict.from_json(judge_obj)
     judge_repaired = client.last_json_repaired
+
+    # 사후 차단: 계산값과 모순되는 우려를 기각한다.
+    dropped: list[str] = []
+    if facts is not None and cfg.screen_contradictions:
+        verdict.concerns, dropped = screen_typed_concerns(verdict.concerns, facts)
+        # 계산값이 요구하는 최소 심각도로 승격 (라벨은 건드리지 않는다)
+        verdict.concerns = apply_severity_floors(verdict.concerns, facts)
+        verdict.risks = [c.statement for c in verdict.concerns]
+    stamp_sources(verdict.concerns, "debate")
     turns.append(
         Turn(
             role="judge",
@@ -197,6 +232,7 @@ def run_debate(
         grounding_doc_ids=[h.doc.doc_id for h in hits],
         ungrounded_turns=sum(1 for t in turns if not t.grounded),
         judge_schema_repaired=judge_repaired,
+        dropped_concerns=dropped,
         elapsed_sec=round(time.time() - t0, 2),
     )
 
@@ -212,8 +248,14 @@ def single_shot(
     retriever: Retriever | None = None,
     exclude_doc_ids: set[str] | None = None,
     with_rag: bool = True,
+    use_rules: bool = True,
+    situation: str = "",
 ) -> DebateResult:
-    """애블레이션 비교군: 디베이트 없이 1회 판정. RAG 근거는 옵션으로 껐다 켤 수 있다."""
+    """애블레이션 비교군: 디베이트 없이 1회 판정.
+
+    with_rag=False  → 근거 검색 없음
+    use_rules=False → COMMON_RULES(인용 강제·동조 금지) 없음 = naive arm
+    """
     cfg = config or DebateConfig()
     client = client or LLMClient()
     t0 = time.time()
@@ -223,15 +265,25 @@ def single_shot(
     if with_rag:
         retriever = retriever or get_retriever(cfg.use_dense)
         hits = retriever.retrieve(
-            _query_for(product, persona), k=cfg.k_docs, exclude_ids=exclude_doc_ids
+            _query_for(product, persona),
+            k=cfg.k_docs,
+            kinds=cfg.retrieve_kinds,
+            exclude_ids=exclude_doc_ids,
         )
         doc_ids = [h.doc.doc_id for h in hits]
         grounding = "\n".join(f"{i+1}. {h.doc.cite()}" for i, h in enumerate(hits)) or "(없음)"
 
-    ctx = P.context_block(product.prompt_block(), persona.prompt_block(), grounding)
+    facts = build_fact_pack(product, persona) if cfg.use_fact_pack else None
+    ctx = P.context_block(
+        product.prompt_block(),
+        persona.prompt_block(),
+        grounding,
+        facts.prompt_block() if facts else "",
+        situation,
+    )
     obj = client.chat_json(
         role="single",
-        system=P.SINGLE_SHOT_SYSTEM,
+        system=P.single_shot_system() if use_rules else P.NAIVE_SYSTEM,
         user=P.single_shot_user(ctx),
         temperature=cfg.temperature_judge,
         seed=seed,
@@ -240,6 +292,13 @@ def single_shot(
     )
     verdict = Verdict.from_json(obj)
     repaired = client.last_json_repaired
+    dropped: list[str] = []
+    if facts is not None and cfg.screen_contradictions:
+        verdict.concerns, dropped = screen_typed_concerns(verdict.concerns, facts)
+        # 계산값이 요구하는 최소 심각도로 승격 (라벨은 건드리지 않는다)
+        verdict.concerns = apply_severity_floors(verdict.concerns, facts)
+        verdict.risks = [c.statement for c in verdict.concerns]
+    stamp_sources(verdict.concerns, "single")
     turn = Turn(
         role="single",
         content=verdict.summary or str(obj)[:500],
@@ -260,5 +319,6 @@ def single_shot(
         grounding_doc_ids=doc_ids,
         ungrounded_turns=0 if turn.grounded else 1,
         judge_schema_repaired=repaired,
+        dropped_concerns=dropped,
         elapsed_sec=round(time.time() - t0, 2),
     )

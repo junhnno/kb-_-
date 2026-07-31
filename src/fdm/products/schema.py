@@ -56,14 +56,18 @@ class Product(BaseModel):
     intr_rate: float | None = Field(default=None, description="기본금리(연 %) 또는 대출 최저금리")
     intr_rate2: float | None = Field(default=None, description="최고우대금리(연 %) 또는 대출 최고금리")
     intr_rate_type: str = "단리"
-    rate_basis: Literal["고정", "변동"] = "고정"
+    # None = 미기재(모름). 기본값을 "고정"으로 두면 변동금리 상품이 조용히
+    # 고정으로 단정되고, 사실팩이 정당한 '금리상승 위험' 우려를 기각한다(실측된 사고).
+    rate_basis: Literal["고정", "변동"] | None = None
     save_trm_months: int | None = None
     min_monthly_manwon: int | None = None
     max_monthly_manwon: int | None = None
     limit_manwon: int | None = Field(default=None, description="대출/카드 한도 (만원)")
 
-    preferentials: list[Preferential] = Field(default_factory=list)
-    fees: list[Fee] = Field(default_factory=list)
+    # None = 미기재(모름) / [] = 명시적으로 없음.
+    # 이 구분이 없으면 "데이터를 안 채웠다"가 "그런 조건은 없다"로 둔갑한다.
+    preferentials: list[Preferential] | None = None
+    fees: list[Fee] | None = None
     taxation: str = "이자소득세 15.4% 원천징수"
     early_termination: str = ""
     risk_notes: list[str] = Field(default_factory=list)
@@ -83,9 +87,10 @@ class Product(BaseModel):
             lines.append(f"- 개요: {self.summary}")
         if self.intr_rate is not None:
             kind = "대출금리" if self.category == "loan" else "금리"
+            basis = self.rate_basis or "금리유형 미기재"
             lines.append(
                 f"- {kind}: 기본 연 {self.intr_rate}% / 최대 연 {self.intr_rate2}% "
-                f"({self.rate_basis}, {self.intr_rate_type})"
+                f"({basis}, {self.intr_rate_type})"
             )
         if self.save_trm_months:
             lines.append(f"- 기간: {self.save_trm_months}개월")
@@ -100,8 +105,15 @@ class Product(BaseModel):
             lines += [
                 f"  · {p.name} (+{p.rate_bonus_pct}%p): {p.requirement}" for p in self.preferentials
             ]
+        elif self.preferentials == []:
+            lines.append("- 우대조건: 없음")
         if self.fees:
-            lines.append("- 수수료: " + "; ".join(f"{f.name} {f.amount} {f.condition}".strip() for f in self.fees))
+            lines.append(
+                "- 수수료: "
+                + "; ".join(f"{f.name} {f.amount} {f.condition}".strip() for f in self.fees)
+            )
+        elif self.fees == []:
+            lines.append("- 수수료: 없음")
         if self.early_termination:
             lines.append(f"- 중도해지/상환: {self.early_termination}")
         lines.append(f"- 과세: {self.taxation}")

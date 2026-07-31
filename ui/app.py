@@ -16,6 +16,14 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from fdm.concerns import (  # noqa: E402
+    TIER_BASIS,
+    TIER_CAVEAT,
+    TIER_LABEL,
+    TIER_MARK,
+    TIER_ORDER,
+    type_label,
+)
 from fdm.config import OUTPUT_DIR, SETTINGS  # noqa: E402
 from fdm.eval.benchmark import AblationReport, compare_holding_rates  # noqa: E402
 from fdm.eval.simulate import SimulationReport, default_variants, sensitivity_analysis, simulate_product  # noqa: E402
@@ -114,8 +122,8 @@ seg_df = pd.DataFrame(
     ]
 )
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["세그먼트 히트맵", "케이스 상세·근거", "민감도", "벤치마크·애블레이션", "리포트"]
+tab1, tab_tier, tab2, tab3, tab4, tab5 = st.tabs(
+    ["세그먼트 히트맵", "우려 계층", "케이스 상세·근거", "민감도", "벤치마크·애블레이션", "리포트"]
 )
 
 with tab1:
@@ -155,6 +163,51 @@ with tab1:
             "저신뢰 세그먼트(추가 검증 필요): " + ", ".join(s.segment for s in low)
         )
 
+with tab_tier:
+    st.subheader("우려 계층 — 교차확인 × 심각도")
+    st.caption(
+        "실측된 두 신호를 곱해 읽을 순서를 만든다. 지우지 않고 정렬한다 — "
+        "놓치면 책임이고, 많으면 무시되기 때문이다."
+    )
+    st.dataframe(
+        pd.DataFrame(
+            [{"계층": f"{TIER_MARK[t]} {TIER_LABEL[t]}", "판단 근거 (실측)": TIER_BASIS[t]} for t in TIER_ORDER]
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+    st.caption(TIER_CAVEAT)
+    if sim.mode != "ensemble":
+        st.info(
+            f"이번 실행은 `{sim.mode}` 단독이라 **교차확인이 성립하지 않습니다**. "
+            "모든 우려가 '단독'으로 계층화되어 실제보다 낮게 표시됩니다. "
+            "교차확인 신호를 쓰려면 단발·디베이트를 병행해야 합니다."
+        )
+
+    for s in sim.segments:
+        tiers = s.tiers
+        counts = " · ".join(f"{TIER_MARK[t]}{len(tiers[t])}" for t in TIER_ORDER)
+        st.markdown(f"### {s.segment}  <small>{counts}</small>", unsafe_allow_html=True)
+        if not any(tiers.values()):
+            st.caption("구조화된 우려 없음")
+            continue
+        for t in TIER_ORDER:
+            items = tiers[t]
+            if not items:
+                continue
+            # T4는 기본으로 접어둔다 — 관측 정확도 0%라 상단을 차지하면 안 된다
+            with st.expander(
+                f"{TIER_MARK[t]} {TIER_LABEL[t]} ({len(items)}건)", expanded=(t in ("T1", "T2"))
+            ):
+                for c in items:
+                    cross = "교차확인" if c.cross_checked else "단독"
+                    st.markdown(f"**{type_label(c.type)}** `{c.severity}·{cross}`  \n{c.statement}")
+                    if c.anchor:
+                        st.caption(f"근거: {c.anchor}")
+                    if c.verify_with:
+                        st.caption(f"확인방법: {c.verify_with}")
+                    st.divider()
+
 with tab2:
     st.subheader("페르소나별 판정과 근거")
     seg_pick = st.selectbox("세그먼트", [s.segment for s in sim.segments])
@@ -178,6 +231,26 @@ with tab2:
                 f"무근거 발화: {c.ungrounded_turns}건",
                 unsafe_allow_html=True,
             )
+            if c.concerns:
+                st.markdown("**우려 (계층순)**")
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {
+                                "계층": f"{TIER_MARK[x.tier]} {x.tier_label}",
+                                "심각도": x.severity,
+                                "교차확인": "O" if x.cross_checked else "—",
+                                "재현": f"{c.concern_run_ratio.get(x.type, 0):.0%}",
+                                "유형": type_label(x.type),
+                                "내용": x.statement,
+                            }
+                            for x in c.concerns
+                        ]
+                    ),
+                    width="stretch",
+                    hide_index=True,
+                )
+                st.caption("재현 = 여러 시드 중 이 우려가 나온 비율. **재현성이지 정확성이 아니다.**")
             st.markdown("**근거**")
             st.write(c.evidence or "—")
             st.markdown("**위험요인**")

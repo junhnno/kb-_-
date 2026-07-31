@@ -50,6 +50,18 @@ def load_corpus() -> list[Doc]:
         with open(CASES_PATH, encoding="utf-8") as f:
             payload = json.load(f)
         for c in payload["cases"]:
+            # 실제 분쟁 사건만 코퍼스에 넣는다.
+            #
+            # 정답셋의 pass 케이스(origin="constructed")는 분쟁 사건이 아니라 과잉경고를
+            # 측정하려고 구성한 정상 상품이다. 이걸 코퍼스에 넣으면 두 가지가 깨진다.
+            #   ① 케이스 문서에 `판정 {label}`이 붙어 있고 평가 시 자기 사례만 제외되므로,
+            #      pass 케이스를 늘린 만큼 이웃 문서의 라벨 분포가 pass로 쏠린다.
+            #      그러면 pass 정확도가 올라도 모델이 좋아진 것인지 RAG 사전확률이
+            #      옮겨간 것인지 구분할 수 없다.
+            #   ② 정답셋과 코퍼스를 동시에 바꾸면 이전 측정(sev_B)과 비교가 불가능해진다.
+            # 정답셋 확대의 효과를 격리하려면 코퍼스는 조정례 12건으로 고정해야 한다.
+            if c.get("origin", "dispute") != "dispute":
+                continue
             docs.append(
                 Doc(
                     doc_id=c["case_id"],
