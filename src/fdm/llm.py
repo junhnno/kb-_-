@@ -144,6 +144,7 @@ class LLMClient:
         options: dict[str, Any] = {
             "temperature": temperature,
             "num_predict": max_tokens or self.s.max_tokens,
+            "num_ctx": self.s.num_ctx,
         }
         if seed is not None:
             options["seed"] = seed
@@ -174,6 +175,15 @@ class LLMClient:
                 r.raise_for_status()
             except httpx.HTTPError:
                 raise LLMError(f"{url} 호출 실패: {e} / {e.response.text[:300]}") from e
+        except httpx.TimeoutException as e:
+            # 서버는 살아 있는데 응답이 늦은 경우. 원인이 다르므로 안내도 달라야 한다.
+            raise LLMError(
+                f"{url} 응답 시간 초과({self.s.timeout:.0f}초): {e}\n"
+                f"  서버는 살아 있을 수 있습니다. 다음을 확인하세요:\n"
+                f"  - FDM_NUM_CTX(현재 {self.s.num_ctx})가 프롬프트 길이보다 충분한가\n"
+                f"  - FDM_MAX_TOKENS(현재 {self.s.max_tokens})를 줄이거나 FDM_TIMEOUT을 늘릴 것\n"
+                f"  - 다른 GPU 작업이 동시에 돌고 있지 않은가"
+            ) from e
         except httpx.HTTPError as e:
             raise LLMError(
                 f"{url} 연결 실패: {e}. `ollama serve`가 떠 있는지 확인하세요. "
@@ -356,6 +366,21 @@ def _mock_reply(role: str, system: str, user: str, seed: int | None, temperature
                     "[MOCK] 페르소나 소득·부채 대비 납입부담 검토",
                 ],
                 "위험요인": ["[MOCK] 우대금리 조건 미달 가능성", "[MOCK] 중도해지 시 약정금리 미적용"],
+                # 구조화 우려도 실제 스키마와 같은 모양으로 낸다 (채점 로직 검증용)
+                "우려": [
+                    {
+                        "유형": "preferential_unattainable",
+                        "심각도": "중대" if score < 50 else "주의",
+                        "내용": "[MOCK] 우대조건 달성 가능성이 낮다",
+                        "앵커": f"[MOCK] 달성률 추정 {score}%",
+                    },
+                    {
+                        "유형": "early_termination_penalty",
+                        "심각도": "경미",
+                        "내용": "[MOCK] 중도해지 시 우대금리 미적용",
+                        "앵커": "",
+                    },
+                ],
                 "개선권고": ["[MOCK] 우대조건 달성률 산출 근거 보완", "[MOCK] 중도해지 불이익 강조 표시"],
                 "confidence": round(0.4 + _rand01(key, "conf") * 0.5, 2),
                 "요약": "[MOCK] 스텁 판정입니다. 실제 LLM 백엔드로 교체하세요.",

@@ -12,7 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from ..agents.debate import DebateConfig, run_debate, single_shot
-from ..agents.schema import DebateResult
+from ..agents.schema import Concern, DebateResult, group_by_tier, merge_concerns
 from ..config import DATA_DIR, OUTPUT_DIR
 from ..llm import LLMClient
 from ..personas.loader import load_personas, sample_cohort
@@ -45,6 +45,15 @@ class SegmentResult(BaseModel):
     top_risks: list[str] = Field(default_factory=list)
     top_recommendations: list[str] = Field(default_factory=list)
     cases: list[ConsensusResult] = Field(default_factory=list)
+    top_concerns: list[Concern] = Field(
+        default_factory=list,
+        description="세그먼트 내 페르소나들의 우려를 유형 기준으로 합쳐 계층순 정렬한 것",
+    )
+
+    @property
+    def tiers(self) -> dict[str, list[Concern]]:
+        """계층별 우려. 산출물은 T1부터 위에서 아래로 읽는다."""
+        return group_by_tier(self.top_concerns)
 
     @property
     def flag(self) -> str:
@@ -186,6 +195,7 @@ def simulate_product(
                 top_risks=_dedup([r for c in crs for r in c.risks])[:5],
                 top_recommendations=_dedup([r for c in crs for r in c.recommendations])[:5],
                 cases=crs,
+                top_concerns=_segment_concerns(crs),
             )
         )
 
@@ -211,6 +221,20 @@ def _dedup(items: list[str]) -> list[str]:
     return [k for k, _ in counts.most_common()]
 
 
+def _segment_concerns(crs: list[ConsensusResult]) -> list[Concern]:
+    """세그먼트 내 페르소나별 우려를 유형 기준으로 합친다.
+
+    sources는 제기 '방식'(single/debate)만 담으므로, 페르소나 수가 많다고
+    교차확인으로 승격되지 않는다 — 계층이 표본 크기에 오염되지 않게 하는 지점이다.
+    """
+    groups: dict[str, list[Concern]] = {}
+    for cr in crs:
+        for c in cr.concerns:
+            for src in c.sources or [cr.mode]:
+                groups.setdefault(src, []).append(c)
+    return merge_concerns(groups) if groups else []
+
+
 # ------------------------------------------------------------------ 민감도 분석
 class VariantSpec(BaseModel):
     label: str
@@ -234,7 +258,9 @@ def apply_variant(product: Product, spec: VariantSpec) -> Product:
     if spec.term_months:
         p.save_trm_months = spec.term_months
     if spec.drop_preferentials:
-        p.preferentials = [x for x in p.preferentials if x.name not in spec.drop_preferentials]
+        p.preferentials = [
+            x for x in (p.preferentials or []) if x.name not in spec.drop_preferentials
+        ]
     if spec.drop_all_fees:
         p.fees = []
     return p
@@ -296,7 +322,7 @@ def default_variants(product: Product) -> list[VariantSpec]:
             VariantSpec(label="금리 +0.5%p", rate_delta_pct=0.5),
             VariantSpec(
                 label="우대조건 최소화",
-                drop_preferentials=[p.name for p in product.preferentials[1:]],
+                drop_preferentials=[p.name for p in (product.preferentials or [])[1:]],
             ),
             VariantSpec(label="기간 12개월", term_months=12),
         ]
@@ -308,5 +334,8 @@ def default_variants(product: Product) -> list[VariantSpec]:
         ]
     return [
         VariantSpec(label="연회비·수수료 면제", drop_all_fees=True),
-        VariantSpec(label="실적조건 완화", drop_preferentials=[p.name for p in product.preferentials[1:]]),
+        VariantSpec(
+            label="실적조건 완화",
+            drop_preferentials=[p.name for p in (product.preferentials or [])[1:]],
+        ),
     ]

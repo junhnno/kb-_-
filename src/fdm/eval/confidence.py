@@ -14,7 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from ..agents.schema import DebateResult, Suitability
+from ..agents.schema import Concern, DebateResult, Suitability, merge_concerns
 
 # 표준편차가 이 값 이상이면 점수 안정성 0점으로 본다 (0~100 스케일)
 SCORE_STD_CEIL = 25.0
@@ -48,6 +48,14 @@ class ConsensusResult(BaseModel):
     risks: list[str] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
     grounding_doc_ids: list[str] = Field(default_factory=list)
+    concerns: list[Concern] = Field(
+        default_factory=list,
+        description="여러 런의 우려를 유형 기준으로 합친 것. sources가 교차확인 계층의 입력",
+    )
+    concern_run_ratio: dict[str, float] = Field(
+        default_factory=dict,
+        description="유형 → 몇 비율의 런에서 제기됐나. **재현성이지 정확성이 아니다**",
+    )
 
     @property
     def adopted(self) -> bool:
@@ -58,6 +66,27 @@ def _top_items(seq: list[str], k: int) -> list[str]:
     """여러 런에 걸쳐 반복 등장한 항목을 우선해 대표 근거/위험을 뽑는다."""
     counts = Counter(s.strip() for s in seq if s and s.strip())
     return [s for s, _ in counts.most_common(k)]
+
+
+def _merge_run_concerns(results: list[DebateResult]) -> tuple[list[Concern], dict[str, float]]:
+    """여러 시드 런의 우려를 하나로 합친다.
+
+    주의: 시드 반복은 **재현성** 신호이고, 교차확인(단발·디베이트가 모두 제기)은
+    **정확성** 신호다. 실측상 재현성은 정확성과 무관했으므로(저신뢰 오답률 40% vs
+    전체 42%), 반복 횟수를 sources에 섞어 계층을 부풀리면 안 된다.
+    sources는 제기 '방식'만 담고, 반복 비율은 별도 필드로 낸다.
+    """
+    groups: dict[str, list[Concern]] = {}
+    for r in results:
+        for c in r.verdict.concerns:
+            for src in c.sources or [r.mode]:
+                groups.setdefault(src, []).append(c)
+    merged = merge_concerns(groups) if groups else []
+
+    n = len(results)
+    raised = Counter(c.type for r in results for c in {x.type: x for x in r.verdict.concerns}.values())
+    ratio = {t: round(cnt / n, 3) for t, cnt in raised.items()}
+    return merged, ratio
 
 
 def aggregate(results: list[DebateResult]) -> ConsensusResult:
@@ -84,6 +113,7 @@ def aggregate(results: list[DebateResult]) -> ConsensusResult:
     )
 
     r0 = results[0]
+    merged_concerns, concern_ratio = _merge_run_concerns(results)
     return ConsensusResult(
         product_id=r0.product_id,
         product_name=r0.product_name,
@@ -107,6 +137,8 @@ def aggregate(results: list[DebateResult]) -> ConsensusResult:
         risks=_top_items([x for r in results for x in r.verdict.risks], 6),
         recommendations=_top_items([x for r in results for x in r.verdict.recommendations], 5),
         grounding_doc_ids=sorted({d for r in results for d in r.grounding_doc_ids}),
+        concerns=merged_concerns,
+        concern_run_ratio=concern_ratio,
     )
 
 

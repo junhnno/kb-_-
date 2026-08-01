@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .concerns import TIER_BASIS, TIER_CAVEAT, TIER_LABEL, TIER_MARK, TIER_ORDER, type_label
 from .config import OUTPUT_DIR
 from .eval.benchmark import AblationReport, HoldingReport
 from .eval.simulate import SensitivityRow, SimulationReport
@@ -46,6 +47,12 @@ def build_report(
     best = max(sim.segments, key=lambda s: s.mean_intent, default=None)
     if best:
         L.append(f"- 가입의향 최고 세그먼트: {best.segment} (평균 {best.mean_intent}점)")
+    act = [(s.segment, len(s.tiers["T1"])) for s in sim.segments if s.tiers["T1"]]
+    if act:
+        L.append(
+            f"- **{TIER_MARK['T1']} 즉시 조치 우려**: "
+            + ", ".join(f"{name}({n}건)" for name, n in act)
+        )
 
     L.append("\n## 2. 세그먼트별 결과")
     L.append("\n| 세그먼트 | n | 가입의향(평균) | 가입률 | pass/warn/fail | 신뢰도 | 상태 |")
@@ -57,7 +64,42 @@ def build_report(
             f"{mix} | {s.mean_confidence:.2f} | {s.flag} |"
         )
 
-    L.append("\n## 3. 주요 위험요인 및 개선권고 (디베이트 근거 기반)")
+    L.append("\n## 3. 우려 계층 (교차확인 × 심각도)")
+    L.append(
+        "\n두 신호를 곱해 읽을 순서를 만든다. **지우지 않고 정렬한다** — "
+        "놓치면 책임이고, 많으면 무시되기 때문이다."
+    )
+    L.append("\n| 계층 | 판단 근거 (실측) |")
+    L.append("|---|---|")
+    for t in TIER_ORDER:
+        L.append(f"| {TIER_MARK[t]} **{TIER_LABEL[t]}** | {TIER_BASIS[t]} |")
+    L.append(f"\n> {TIER_CAVEAT}")
+    if sim.mode != "ensemble":
+        L.append(
+            f"\n> 이번 실행은 `{sim.mode}` 단독이라 **교차확인이 성립하지 않는다**. "
+            "모든 우려가 '단독'으로 계층화되어 실제보다 낮게 표시된다. "
+            "교차확인 신호를 쓰려면 단발·디베이트를 병행해야 한다."
+        )
+
+    for s in sim.segments:
+        L.append(f"\n### {s.segment}")
+        tiers = s.tiers
+        if not any(tiers.values()):
+            L.append("(구조화된 우려 없음)")
+        for t in TIER_ORDER:
+            items = tiers[t]
+            if not items:
+                continue
+            L.append(f"\n**{TIER_MARK[t]} {TIER_LABEL[t]}** ({len(items)}건)")
+            for c in items:
+                cross = "교차확인" if c.cross_checked else "단독"
+                L.append(f"- `{c.severity}·{cross}` **{type_label(c.type)}** — {c.statement}")
+                if c.anchor:
+                    L.append(f"    - 근거: {c.anchor}")
+                if c.verify_with:
+                    L.append(f"    - 확인방법: {c.verify_with}")
+
+    L.append("\n## 3-1. 주요 위험요인 및 개선권고 (디베이트 근거 기반)")
     for s in sim.segments:
         L.append(f"\n### {s.segment}")
         if s.top_risks:
