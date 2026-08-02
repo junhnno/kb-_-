@@ -15,8 +15,11 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
+from ..anchors import apply_anchor_verification
+from ..claim_check import build_verification
 from ..config import SETTINGS
 from ..facts import apply_severity_floors, build_fact_pack, screen_typed_concerns
+from ..situation import screen_by_situation
 from ..llm import LLMClient, extract_json
 from ..personas.schema import Persona
 from ..products.schema import Product
@@ -29,6 +32,7 @@ from .schema import (
     Turn,
     Verdict,
     count_citations,
+    drop_unanchored,
     is_grounded,
     stamp_sources,
 )
@@ -53,6 +57,18 @@ class DebateConfig:
     enforce_grounding: bool = True  # 근거 없는 발화는 1회 재요청
     use_fact_pack: bool = True  # 파생 지표를 계산해 주입 (사전 예방)
     screen_contradictions: bool = True  # 계산값과 모순되는 우려를 기각 (사후 차단)
+    # 앵커(근거) 없는 우려를 심각도 캡이 아니라 아예 제거한다. 기본은 SETTINGS(.env)에서 읽음.
+    # 실측: 오탐 30.9% precision, 깨끗한 상품 12/12건에서 평균 2.92개 오탐.
+    # 켤 때 recall이 같이 무너지지 않는지 반드시 같이 측정할 것 (schema.drop_unanchored 참고).
+    drop_unanchored_concerns: bool = field(default_factory=lambda: SETTINGS.drop_unanchored)
+    # 앵커가 실재하는 조항·문서·계산값을 가리키는지 검증하고 지어낸 인용을 강등한다.
+    # 기본은 SETTINGS(.env)에서 읽음. anchors.py 참고.
+    verify_anchors: bool = field(default_factory=lambda: SETTINGS.verify_anchors)
+    # 회의론자 주장을 심판이 보기 전에 코드로 검증해 기각 사유를 주입한다.
+    # 사후 필터들과 달리 심판의 **입력**을 바꾸므로 라벨에 영향을 준다. claim_check.py 참고.
+    verify_claims: bool = field(default_factory=lambda: SETTINGS.verify_claims)
+    # 판매 정황과 직접 모순되는 '설명 부족' 주장을 기각한다. situation.py 참고.
+    screen_situation: bool = field(default_factory=lambda: SETTINGS.screen_situation)
 
 
 def _query_for(product: Product, persona: Persona) -> str:
@@ -187,10 +203,16 @@ def run_debate(
         f"### {r}\n{t.content}"
         for r, t in zip(["옹호자", "페르소나(1차)", "회의론자", "페르소나(재반응)"], turns)
     )
+    # 근거 검증 레이어: 회의론자 주장을 심판이 보기 전에 코드로 검증한다.
+    # 사후 필터와 달리 심판의 입력을 바꾸므로 판정 라벨에 영향을 줄 수 있다.
+    verification, claim_log = ("", [])
+    if cfg.verify_claims:
+        verification, claim_log = build_verification(t_skp.content, facts, situation)
+
     judge_obj = client.chat_json(
         role="judge",
         system=P.judge_system(),
-        user=P.judge_user(ctx, transcript),
+        user=P.judge_user(ctx, transcript, verification),
         temperature=cfg.temperature_judge,
         seed=seed + 44,
         json_schema=VERDICT_JSON_SCHEMA,
@@ -200,11 +222,30 @@ def run_debate(
     judge_repaired = client.last_json_repaired
 
     # 사후 차단: 계산값과 모순되는 우려를 기각한다.
-    dropped: list[str] = []
+    dropped: list[str] = list(claim_log)  # 심판 이전에 기각된 주장도 기록에 남긴다
     if facts is not None and cfg.screen_contradictions:
-        verdict.concerns, dropped = screen_typed_concerns(verdict.concerns, facts)
+        verdict.concerns, screened = screen_typed_concerns(verdict.concerns, facts)
+        dropped += screened
+    # 앵커 실재 검증은 **승격보다 먼저** 돌린다. 순서를 뒤집으면 계산값이 올려놓은
+    # 심각도를 지어낸 인용 강등이 도로 깎는다 — 코드가 계산한 사실이 최종 판단이어야 한다.
+    if cfg.screen_situation:
+        verdict.concerns, dropped_sit = screen_by_situation(verdict.concerns, situation)
+        dropped += dropped_sit
+    if cfg.verify_anchors:
+        verdict.concerns, demoted = apply_anchor_verification(
+            verdict.concerns, product=product,
+            doc_ids={h.doc.doc_id for h in hits},
+            case_doc_ids={h.doc.doc_id for h in hits if h.doc.kind == "case"},
+            facts=facts,
+        )
+        dropped += demoted
+    if facts is not None and cfg.screen_contradictions:
         # 계산값이 요구하는 최소 심각도로 승격 (라벨은 건드리지 않는다)
         verdict.concerns = apply_severity_floors(verdict.concerns, facts)
+    verdict.risks = [c.statement for c in verdict.concerns]
+    if cfg.drop_unanchored_concerns:
+        verdict.concerns, dropped_unanchored = drop_unanchored(verdict.concerns)
+        dropped += dropped_unanchored
         verdict.risks = [c.statement for c in verdict.concerns]
     stamp_sources(verdict.concerns, "debate")
     turns.append(
@@ -261,6 +302,7 @@ def single_shot(
     t0 = time.time()
 
     doc_ids: list[str] = []
+    hits: list = []  # with_rag=False(norag/naive arm)에서도 아래에서 참조된다
     grounding = "(근거 검색 미사용 — 애블레이션 조건)"
     if with_rag:
         retriever = retriever or get_retriever(cfg.use_dense)
@@ -295,8 +337,24 @@ def single_shot(
     dropped: list[str] = []
     if facts is not None and cfg.screen_contradictions:
         verdict.concerns, dropped = screen_typed_concerns(verdict.concerns, facts)
+    # 승격보다 먼저 검증한다 (run_debate와 같은 이유)
+    if cfg.screen_situation:
+        verdict.concerns, dropped_sit = screen_by_situation(verdict.concerns, situation)
+        dropped += dropped_sit
+    if cfg.verify_anchors:
+        verdict.concerns, demoted = apply_anchor_verification(
+            verdict.concerns, product=product, doc_ids=set(doc_ids),
+            case_doc_ids={h.doc.doc_id for h in hits if h.doc.kind == "case"},
+            facts=facts,
+        )
+        dropped += demoted
+    if facts is not None and cfg.screen_contradictions:
         # 계산값이 요구하는 최소 심각도로 승격 (라벨은 건드리지 않는다)
         verdict.concerns = apply_severity_floors(verdict.concerns, facts)
+    verdict.risks = [c.statement for c in verdict.concerns]
+    if cfg.drop_unanchored_concerns:
+        verdict.concerns, dropped_unanchored = drop_unanchored(verdict.concerns)
+        dropped += dropped_unanchored
         verdict.risks = [c.statement for c in verdict.concerns]
     stamp_sources(verdict.concerns, "single")
     turn = Turn(

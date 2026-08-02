@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from functools import lru_cache
 
-from ..config import BENCHMARK_DIR, RAG_DIR
+from ..config import BENCHMARK_DIR, RAG_DIR, SETTINGS
 
 LAWS_DIR = RAG_DIR / "laws"
 CASES_PATH = BENCHMARK_DIR / "dispute_cases.json"
@@ -62,10 +62,16 @@ def load_corpus() -> list[Doc]:
             # 정답셋 확대의 효과를 격리하려면 코퍼스는 조정례 12건으로 고정해야 한다.
             if c.get("origin", "dispute") != "dispute":
                 continue
+            # 라벨을 제목에 박아두면 프롬프트에 그대로 인용된다. 코퍼스의 83.3%가
+            # fail/warn이라 이 노출이 곧 과잉경고 방향의 사전확률이 된다.
+            # FDM_CASE_HIDE_LABEL=1이면 판단요지 본문은 남기고 라벨만 감춘다.
+            title = f"조정사례(가공) {c['title']}"
+            if not SETTINGS.case_hide_label:
+                title += f" — 판정 {c['label']}"
             docs.append(
                 Doc(
                     doc_id=c["case_id"],
-                    title=f"조정사례(가공) {c['title']} — 판정 {c['label']}",
+                    title=title,
                     text=f"[사실관계] {c['facts']}\n[판단요지] {c['decision_gist']}",
                     kind="case",
                     principle=tuple(c.get("principle", [])),

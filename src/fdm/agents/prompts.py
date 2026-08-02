@@ -245,8 +245,20 @@ def persona_second_user(ctx: str, advocate_text: str, skeptic_text: str, first: 
     )
 
 
-def judge_user(ctx: str, transcript: str) -> str:
-    return ctx + f"\n[디베이트 전문]\n{transcript}\n\n[지시] 최종 판정 JSON을 출력하라."
+def judge_user(ctx: str, transcript: str, verification: str = "") -> str:
+    """심판 입력.
+
+    `verification`은 코드가 회의론자 주장을 미리 검증한 결과다(claim_check.py).
+    **전문 뒤, 지시 앞**에 놓는다 — 심판이 우려 목록을 읽은 직후에 기각 사유를 보게 해야
+    "우려가 제기되었다"는 인상이 굳기 전에 상쇄된다.
+    """
+    block = f"\n{verification}\n" if verification else ""
+    return (
+        ctx
+        + f"\n[디베이트 전문]\n{transcript}\n"
+        + block
+        + "\n[지시] 최종 판정 JSON을 출력하라."
+    )
 
 
 def single_shot_system() -> str:

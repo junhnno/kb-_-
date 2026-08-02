@@ -124,6 +124,13 @@ class Concern(BaseModel):
         default="", description="계산값·약관 조항·페르소나 수치 등 근거. 없으면 심각도가 제한된다"
     )
     verify_with: str = Field(default="", description="실제 데이터로 확인하는 방법 (코드가 채움)")
+    anchor_status: str = Field(
+        default="unverifiable",
+        description=(
+            "앵커 실재 검증 결과 (코드가 채움). verified=실존 조항·문서 ID 또는 사실팩 수치와 일치, "
+            "fabricated=없는 조항을 인용, unverifiable=검증할 거리 없음. anchors.py 참고"
+        ),
+    )
     sources: list[str] = Field(
         default_factory=list,
         description="이 우려를 제기한 방식(single/debate). 둘 다면 교차 확인된 것",
@@ -187,6 +194,30 @@ def group_by_tier(concerns: list[Concern]) -> dict[str, list[Concern]]:
     return out
 
 
+def drop_unanchored(concerns: list[Concern]) -> tuple[list[Concern], list[str]]:
+    """앵커 없는 우려를 아예 제거한다 (finalize()의 심각도 캡보다 공격적인 옵션).
+
+    실측(2026-08-01, pass 비중을 높인 정답셋): ensemble precision 30.9%,
+    깨끗한 상품(gold=[]) 12/12건 전부에서 평균 2.92개 오탐이 발생했다.
+    앵커 없는 우려는 대부분 상품군에 흔한 일반론(예: "중도해지 시 불이익")이라
+    오탐의 주 원인으로 보인다. 심각도를 '주의'로 낮추는 기존 방식은 채점 시
+    여전히 오탐으로 잡히므로(정답셋이 유형 일치로 채점), 발굴량 자체를 줄이려면
+    제거가 필요하다.
+
+    기존 finalize()의 기본 동작(살려두고 캡만 건다)보다 공격적이므로
+    옵션으로 분리한다 — 기본값 False. recall이 같이 깎이는지 반드시 함께
+    측정할 것 (앵커를 못 단 것 뿐인 정당한 우려까지 버릴 위험이 있다).
+    """
+    kept: list[Concern] = []
+    dropped: list[str] = []
+    for c in concerns:
+        if not c.anchor.strip():
+            dropped.append(f"{c.statement} [기각: 앵커 없음]")
+        else:
+            kept.append(c)
+    return kept, dropped
+
+
 def stamp_sources(concerns: list[Concern], source: str) -> list[Concern]:
     """단독 실행 결과에 '어느 방식이 제기했나'를 표시한다.
 
@@ -219,10 +250,12 @@ def merge_concerns(groups: dict[str, list[Concern]]) -> list[Concern]:
                 by_type[c.type] = c
                 continue
             merged_sources = sorted(set(prev.sources) | set(c.sources))
-            # 앵커 유무 → 심각도 순으로 우선한다
-            better = c if (bool(c.anchor) > bool(prev.anchor)) else prev
-            if bool(c.anchor) == bool(prev.anchor):
-                better = c if severity_rank(c.severity) > severity_rank(prev.severity) else prev
+            # 검증된 앵커 → 앵커 유무 → 심각도 순으로 우선한다.
+            # 실재가 확인된 인용이 있는 쪽을 남겨야 산출물의 "여기를 보라"가 신뢰된다.
+            def _rank(x: "Concern") -> tuple[int, int, int]:
+                return (x.anchor_status == "verified", bool(x.anchor), severity_rank(x.severity))
+
+            better = c if _rank(c) > _rank(prev) else prev
             better = better.model_copy(deep=True)
             better.sources = merged_sources
             by_type[c.type] = better

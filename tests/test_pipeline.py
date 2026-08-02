@@ -772,3 +772,273 @@ def test_lawonly_config_does_not_leak_into_other_arms():
     case = load_cases()[0]
     run_case_arm(case, "single_lawonly", n_seeds=1, config=cfg)
     assert cfg.retrieve_kinds is None, "원본 config가 변경됐다"
+
+
+# --------------------------------------------------------------- 앵커 실재 검증
+
+
+def _anchor_product():
+    """조항 ID가 있는 실제 상품 하나."""
+    from fdm.products.schema import load_all_products
+
+    for p in load_all_products():
+        if p.clauses:
+            return p
+    raise AssertionError("clauses를 가진 상품이 없다")
+
+
+def test_verify_anchor_detects_fabricated_clause():
+    """없는 조항을 인용하면 fabricated여야 한다. 이게 이 기능의 존재 이유다."""
+    from fdm.anchors import FABRICATED, VERIFIED, clause_keys, verify_anchor
+
+    p = _anchor_product()
+    keys = clause_keys(p)
+    real = sorted(keys)[0]  # 예: "약관 제3조"
+
+    assert verify_anchor(real, clause_ids=keys, doc_ids=set()) == VERIFIED
+    assert verify_anchor("약관 제999조", clause_ids=keys, doc_ids=set()) == FABRICATED
+
+
+def test_verify_anchor_normalizes_spacing():
+    """'약관제 5 조' 같은 표기 흔들림 때문에 정당한 인용이 강등되면 안 된다."""
+    from fdm.anchors import VERIFIED, clause_keys, verify_anchor
+
+    import re
+
+    p = _anchor_product()
+    keys = clause_keys(p)
+    # 실제 키 하나를 그대로 쪼개 공백만 흐트러뜨린다 (종별·단위를 임의로 바꾸지 않는다)
+    kind, num, unit = re.match(r"(\S+) 제(\d+)([조항호])", sorted(keys)[0]).groups()
+    assert verify_anchor(
+        f"[{kind}제 {num} {unit}]", clause_ids=keys, doc_ids=set()
+    ) == VERIFIED
+
+
+def test_verify_anchor_checks_doc_ids():
+    from fdm.anchors import FABRICATED, VERIFIED, verify_anchor
+
+    docs = {"FCPA-19", "CASE-001"}
+    assert verify_anchor("[FCPA-19]", clause_ids=set(), doc_ids=docs) == VERIFIED
+    assert verify_anchor("[FCPA-99]", clause_ids=set(), doc_ids=docs) == FABRICATED
+
+
+def test_verify_anchor_matches_factpack_numbers():
+    """사실팩이 제시한 수치를 인용하면 검증된 것으로 본다."""
+    from fdm.anchors import UNVERIFIABLE, VERIFIED, verify_anchor
+    from fdm.facts import build_fact_pack
+
+    p = _anchor_product()
+    persona = load_personas(limit=50)[0]
+    f = build_fact_pack(p, persona)
+
+    ok = verify_anchor(
+        f"월 여유자금 {f.monthly_surplus}만원", clause_ids=set(), doc_ids=set(), facts=f
+    )
+    assert ok == VERIFIED
+    # 사실팩에 없는 수치는 '틀렸다'가 아니라 '검증 불가'다 (모름과 아니오의 구분)
+    assert verify_anchor(
+        "월 여유자금 999999만원", clause_ids=set(), doc_ids=set(), facts=f
+    ) == UNVERIFIABLE
+
+
+def test_verify_anchor_free_text_is_unverifiable_not_fabricated():
+    """검증할 거리가 없는 서술을 지어낸 것으로 취급하면 정당한 우려가 죽는다."""
+    from fdm.anchors import UNVERIFIABLE, verify_anchor
+
+    assert verify_anchor("", clause_ids=set(), doc_ids=set()) == UNVERIFIABLE
+    assert verify_anchor(
+        "중도해지 시 불이익이 있다", clause_ids=set(), doc_ids=set()
+    ) == UNVERIFIABLE
+
+
+def test_apply_anchor_verification_demotes_but_never_deletes():
+    """지우지 않고 강등한다 (작업원칙 4). 개수가 줄면 안 된다."""
+    from fdm.agents.schema import Concern
+    from fdm.anchors import apply_anchor_verification
+
+    p = _anchor_product()
+    concerns = [
+        Concern(type="fee_hidden", severity="치명", statement="수수료", anchor="약관 제999조"),
+        Concern(type="dsr_overload", severity="중대", statement="DSR", anchor="설명 없음"),
+    ]
+    out, demoted = apply_anchor_verification(concerns, product=p, doc_ids=set(), facts=None)
+
+    assert len(out) == 2, "강등이지 삭제가 아니다"
+    assert out[0].severity == "경미" and out[0].anchor_status == "fabricated"
+    assert len(demoted) == 1
+    # 검증 불가는 건드리지 않는다
+    assert out[1].severity == "중대" and out[1].anchor_status == "unverifiable"
+
+
+# ------------------------------------------------------- 판매 정황 모순 스크리닝
+
+
+def test_situation_negation_is_not_read_as_disclosure():
+    """부정문을 긍정으로 읽으면 정답 우려를 지운다 — 이 기능의 최대 위험.
+
+    초기 구현이 CASE-004의 "…시나리오는 안내받지 못했다"를 '안내함'으로,
+    CASE-007의 "설명하지 않았다"를 '설명함'으로 판정했다. 회귀 방지용.
+    """
+    from fdm.situation import disclosed_topics
+
+    assert disclosed_topics("금리 재산정 주기와 상승 시 시나리오는 안내받지 못했다") == set()
+    assert disclosed_topics("연 18%대 수수료율과 잔액 누적 구조는 설명하지 않았다") == set()
+    # 부분·형식적 이행도 '설명했다'로 보지 않는다
+    assert disclosed_topics("예금자보호 한도 초과 안내가 형식적으로만 이루어졌다") == set()
+
+
+def test_situation_screen_never_fires_on_violation_cases():
+    """gold != pass인 케이스에서 발동하면 정답 우려를 기각하게 된다."""
+    from fdm.eval.benchmark import load_cases
+    from fdm.situation import disclosed_topics
+
+    for c in load_cases():
+        if c.label != "pass":
+            assert not disclosed_topics(c.facts), f"{c.case_id}(gold={c.label})에서 오발동"
+
+
+def test_situation_screen_drops_reported_false_positives():
+    """실측된 오탐 패턴을 실제로 기각하는가."""
+    from fdm.agents.schema import Concern
+    from fdm.eval.benchmark import load_cases
+    from fdm.situation import screen_by_situation
+
+    cases = {c.case_id: c for c in load_cases()}
+    for cid, stmt in [
+        ("CASE-014", "중도해지 시 이자손실 위험에 대한 설명이 부족"),
+        ("CASE-008", "중도해지 불이익 설명 부족"),
+        ("CASE-020", "금리 변동 가능성과 상환 부담 증가 시나리오를 설명하지 않아"),
+    ]:
+        c = Concern(type="explanation_insufficient", severity="중대", statement=stmt)
+        kept, dropped = screen_by_situation([c], cases[cid].facts)
+        assert dropped and not kept, f"{cid}: 기각되지 않았다"
+
+
+def test_situation_screen_keeps_non_disclosure_concerns():
+    """같은 항목이라도 '설명 부족'이 아닌 우려는 살려야 한다."""
+    from fdm.agents.schema import Concern
+    from fdm.eval.benchmark import load_cases
+    from fdm.situation import screen_by_situation
+
+    case = {c.case_id: c for c in load_cases()}["CASE-014"]
+    keep = [
+        Concern(type="affordability", severity="중대", statement="월 여유자금 대비 납입 부담이 과도"),
+        Concern(type="early_termination_penalty", severity="중대",
+                statement="중도해지 이율 자체가 지나치게 낮다"),
+    ]
+    kept, dropped = screen_by_situation(keep, case.facts)
+    assert len(kept) == 2 and not dropped
+
+
+def test_situation_screen_noop_without_situation():
+    """정황이 없으면 아무것도 하지 않아야 한다 (모름을 아니오로 읽지 않는다)."""
+    from fdm.agents.schema import Concern
+    from fdm.situation import screen_by_situation
+
+    c = [Concern(type="explanation_insufficient", severity="중대", statement="중도해지 설명 부족")]
+    kept, dropped = screen_by_situation(c, "")
+    assert len(kept) == 1 and not dropped
+
+
+def test_anchor_borrowed_from_other_case_is_not_verified():
+    """남의 조정례를 근거로 재활용한 것은 verified가 아니다.
+
+    실측: CASE-013/015/017/018이 전부 [CASE-009]를 자기 앵커로 달았다.
+    문서는 실재하므로 단순 doc_id 대조로는 verified가 되어버린다.
+    """
+    from fdm.anchors import BORROWED, VERIFIED, verify_anchor
+
+    docs = {"FCPA-19", "CASE-009"}
+    cases = {"CASE-009"}
+    assert verify_anchor(
+        "[CASE-009]", clause_ids=set(), doc_ids=docs, case_doc_ids=cases
+    ) == BORROWED
+    # 법령을 같이 인용했으면 근거로 인정한다
+    assert verify_anchor(
+        "[FCPA-19] [CASE-009]", clause_ids=set(), doc_ids=docs, case_doc_ids=cases
+    ) == VERIFIED
+
+
+def test_borrowed_anchor_is_demoted_not_deleted():
+    from fdm.agents.schema import Concern
+    from fdm.anchors import apply_anchor_verification
+
+    p = _anchor_product()
+    c = [Concern(type="fee_hidden", severity="치명", statement="수수료", anchor="[CASE-009]")]
+    out, demoted = apply_anchor_verification(
+        c, product=p, doc_ids={"CASE-009"}, case_doc_ids={"CASE-009"}
+    )
+    assert len(out) == 1 and out[0].severity == "주의"
+    assert out[0].anchor_status == "borrowed" and len(demoted) == 1
+
+
+# ------------------------------------------------- 근거 검증 레이어 (claim_check)
+
+
+def _case_and_facts(case_id):
+    from fdm.eval.benchmark import load_cases
+    from fdm.facts import build_fact_pack
+
+    c = {x.case_id: x for x in load_cases()}[case_id]
+    return c, build_fact_pack(c.product, c.persona)
+
+
+def test_claim_check_rejects_contradicted_skeptic_claims():
+    """깨끗한 케이스에서 회의론자가 만들어낸 주장을 심판 이전에 기각해야 한다."""
+    from fdm.claim_check import build_verification
+
+    c, f = _case_and_facts("CASE-014")  # gold=pass, 중도해지 설명 명시, 우대조건 없음
+    skeptic = (
+        "- 중도해지 시 불이익에 대한 설명이 부족하다 [약관 제7조]\n"
+        "- 월 납입 부담이 과도하다\n"
+        "- [preferential_unattainable] 우대조건 달성이 어렵다\n"
+        "- [dsr_overload] DSR 부담이 상당하다\n"
+    )
+    block, log = build_verification(skeptic, f, c.facts)
+    assert len(log) == 4, f"4건 모두 기각돼야 한다: {log}"
+    assert "판정 근거로 삼지 말라" in block
+    # 심판이 무엇과 모순인지 알 수 있게 수치가 들어가야 한다
+    assert "여유자금" in block and "DSR" in block
+
+
+def test_claim_check_never_rejects_legitimate_violations():
+    """위반 케이스의 정당한 주장을 기각하면 정답을 잃는다 — 최우선 안전조건."""
+    from fdm.claim_check import check_claims
+
+    for cid, claims in [
+        ("CASE-004", ["금리 재산정 주기와 상승 시 상환액 변동을 설명하지 않았다 [FCPA-19]"]),
+        ("CASE-007", ["연 18%대 수수료율과 잔액 누적 구조를 설명하지 않았다"]),
+        ("CASE-010", ["예금자보호 한도 5천만원을 초과하는데 안내가 형식적이었다"]),
+        ("CASE-001", ["원금 손실 가능 범위에 대한 설명이 이해 가능한 수준이 아니었다"]),
+    ]:
+        c, f = _case_and_facts(cid)
+        assert not check_claims(claims, f, c.facts), f"{cid}: 정당한 주장을 기각했다"
+
+
+def test_claim_check_returns_empty_block_when_nothing_rejected():
+    """기각이 없으면 프롬프트에 아무것도 붙이지 않는다 (불필요한 컨텍스트 낭비 방지)."""
+    from fdm.claim_check import build_verification
+
+    c, f = _case_and_facts("CASE-004")
+    block, log = build_verification("- 설명이 불충분했다", f, c.facts)
+    assert block == "" and log == []
+
+
+def test_claim_check_split_keeps_bullet_as_one_claim():
+    """'주장 → 반박 → 근거' 한 불릿을 문장으로 쪼개면 근거만 떼어 판정하게 된다."""
+    from fdm.claim_check import split_claims
+
+    text = "- 옹호자는 A라고 했다. 그러나 B다. 근거는 [약관 제7조]\n1부. 반박\n- 두 번째 주장이다"
+    claims = split_claims(text)
+    assert len(claims) == 2, claims
+    assert claims[0].startswith("옹호자는")
+
+
+def test_judge_user_places_verification_before_instruction():
+    """검증 블록은 전문 뒤·지시 앞에 와야 한다 (읽는 순서가 효과를 좌우한다)."""
+    from fdm.agents import prompts as P
+
+    out = P.judge_user("CTX", "TRANSCRIPT", "VERIFY")
+    assert out.index("TRANSCRIPT") < out.index("VERIFY") < out.index("[지시]")
+    # 검증이 없으면 기존과 동일한 형태를 유지한다
+    assert "VERIFY" not in P.judge_user("CTX", "TRANSCRIPT")
