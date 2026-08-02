@@ -93,6 +93,12 @@ class Settings:
     verify_claims: bool = field(
         default_factory=lambda: _env("FDM_VERIFY_CLAIMS", "0") not in ("0", "false", "False")
     )
+    # v2 개입: 성립하지 않는 우려 유형을 **회의론자가 말하기 전에** 차단한다.
+    # 사후 기각은 대화록에 허위 우려를 남겨 심판이 anchoring되지만, 이건 원천 차단이다.
+    # verify_claims와 함께 켜는 것을 전제로 한다.
+    skeptic_guard: bool = field(
+        default_factory=lambda: _env("FDM_SKEPTIC_GUARD", "0") not in ("0", "false", "False")
+    )
 
     @property
     def base_url(self) -> str:

@@ -1066,3 +1066,72 @@ def test_label_decoupling_rule_is_flag_gated():
     assert "우려의 **개수**는 라벨과 무관" in P.judge_system(decouple_label=True)
     # 목록은 계속 다 채우라는 기존 규칙이 살아 있어야 recall이 유지된다
     assert "누락 없이 옮긴다" in P.judge_system(decouple_label=True)
+
+
+# --------------------------------------------- 회의론자 사전 차단 (v2 개입)
+
+
+def test_skeptic_guard_never_blocks_gold_concerns():
+    """차단 목록이 정답 우려를 막으면 recall이 무너진다 — 최우선 안전조건."""
+    import json
+
+    from fdm.claim_check import _DISCLOSURE_TO_TYPE
+    from fdm.config import BENCHMARK_DIR
+    from fdm.eval.benchmark import load_cases
+    from fdm.facts import CONTRADICTION_RULES, build_fact_pack, is_contradicted
+    from fdm.situation import disclosed_topics
+
+    gold = json.loads(
+        (BENCHMARK_DIR / "concern_taxonomy.json").read_text(encoding="utf-8")
+    )["gold"]
+    checked = 0
+    for c in load_cases():
+        f = build_fact_pack(c.product, c.persona)
+        blocked = {t for t in CONTRADICTION_RULES if is_contradicted(t, f)}
+        soft = {
+            _DISCLOSURE_TO_TYPE[t]
+            for t in disclosed_topics(c.facts)
+            if t in _DISCLOSURE_TO_TYPE
+        }
+        g = set(gold.get(c.case_id, []))
+        checked += len(g)
+        assert not (g & blocked), f"{c.case_id}: 정답 우려가 전면 차단됨 {g & blocked}"
+        assert not (g & soft), f"{c.case_id}: 정답 우려가 설명부족 제한에 걸림 {g & soft}"
+    assert checked >= 25, "정답 우려가 너무 적어 검증이 무의미하다"
+
+
+def test_skeptic_guard_blocks_on_clean_case():
+    """깨끗한 상품에서는 허위 우려를 만들 여지를 미리 줄여야 한다."""
+    from fdm.claim_check import skeptic_guard_block
+
+    c, f = _case_and_facts("CASE-014")
+    block = skeptic_guard_block(f, c.facts)
+    assert "제기하지 말 것" in block
+    assert "우대조건" in block  # 우대조건 없는 상품인데 회의론자가 자주 제기했다
+    assert "중대한 우려 없음" in block, "우려가 없으면 없다고 말할 길을 줘야 한다"
+
+
+def test_skeptic_guard_leaves_violation_case_reportable():
+    """위반 케이스에서 실제 위반 유형까지 막으면 안 된다."""
+    from fdm.claim_check import skeptic_guard_block
+
+    c, f = _case_and_facts("CASE-004")  # 설명의무 위반, 변동금리 미설명
+    block = skeptic_guard_block(f, c.facts)
+    assert "변동금리 상승 위험" not in block, "정답 우려 유형을 차단했다"
+
+
+def test_skeptic_user_places_guard_before_instruction():
+    from fdm.agents import prompts as P
+
+    out = P.skeptic_user("CTX", "ADV", "P1", "GUARD")
+    assert out.index("P1") < out.index("GUARD") < out.index("[지시]")
+    assert "GUARD" not in P.skeptic_user("CTX", "ADV", "P1")
+
+
+def test_judge_separates_hesitation_from_violation():
+    """페르소나 망설임을 판매원칙 위반으로 읽는 혼동을 막는다."""
+    from fdm.agents import prompts as P
+
+    s = P.judge_system(decouple_label=True)
+    assert "가입의향점수가 낮다" in s and "부적합하다는 뜻이 아니다" in s
+    assert "혼동 금지" not in P.judge_system(), "v1 baseline과 섞이면 안 된다"

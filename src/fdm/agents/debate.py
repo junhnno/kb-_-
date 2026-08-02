@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 
 from ..anchors import apply_anchor_verification
-from ..claim_check import build_verification
+from ..claim_check import build_verification, skeptic_guard_block
 from ..config import SETTINGS
 from ..facts import apply_severity_floors, build_fact_pack, screen_typed_concerns
 from ..situation import screen_by_situation
@@ -67,6 +67,8 @@ class DebateConfig:
     # 회의론자 주장을 심판이 보기 전에 코드로 검증해 기각 사유를 주입한다.
     # 사후 필터들과 달리 심판의 **입력**을 바꾸므로 라벨에 영향을 준다. claim_check.py 참고.
     verify_claims: bool = field(default_factory=lambda: SETTINGS.verify_claims)
+    # v2: 성립하지 않는 우려를 회의론자가 말하기 전에 차단해 대화록 자체를 깨끗하게 만든다.
+    skeptic_guard: bool = field(default_factory=lambda: SETTINGS.skeptic_guard)
     # 판매 정황과 직접 모순되는 '설명 부족' 주장을 기각한다. situation.py 참고.
     screen_situation: bool = field(default_factory=lambda: SETTINGS.screen_situation)
 
@@ -184,8 +186,10 @@ def run_debate(
     )
     turns.append(t_p1)
 
+    guard = skeptic_guard_block(facts, situation) if cfg.skeptic_guard else ""
     t_skp = _turn(
-        client, "skeptic", P.skeptic_system(), P.skeptic_user(ctx, t_adv.content, t_p1.content),
+        client, "skeptic", P.skeptic_system(),
+        P.skeptic_user(ctx, t_adv.content, t_p1.content, guard),
         temperature=cfg.temperature_debater, seed=seed + 22,
         enforce_grounding=cfg.enforce_grounding,
     )

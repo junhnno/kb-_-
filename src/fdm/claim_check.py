@@ -164,6 +164,62 @@ def verification_block(rejected: list[tuple[str, str]], n_total: int = 0) -> str
     return "\n".join(lines)
 
 
+# 판매 정황에서 '설명했다'로 확인된 항목 → 대응하는 우려 유형
+_DISCLOSURE_TO_TYPE: dict[str, str] = {
+    "early_termination": "early_termination_penalty",
+    "rate_structure": "rate_variability",
+    "rate_display": "rate_display_misleading",
+    "preferential": "preferential_unattainable",
+    "principal_loss": "principal_loss_risk",
+    "deposit_protection": "deposit_protection_limit",
+    "fee": "fee_hidden",
+    "maturity": "maturity_refinance_risk",
+}
+
+
+def skeptic_guard_block(facts: FactPack | None, situation: str = "") -> str:
+    """회의론자에게 **말하기 전에** 넘기는 차단 목록.
+
+    사후 기각(build_verification)보다 강한 개입이다. 사후 기각은 심판에게
+    "이건 기각됐다"고 알려줄 뿐, 대화록에는 허위 우려가 그대로 남아 심판이 끌려간다.
+    실측: 디베이트의 깨끗한 상품 특이도가 16.7%(2/12)까지 떨어진 원인이 이 anchoring이다.
+
+    차단 근거는 두 가지이며 성격이 다르므로 지시도 다르게 준다.
+      (a) 계산값 모순 — 그 우려 자체가 성립하지 않는다. 유형 전체를 막는다.
+      (b) 정황상 설명 완료 — '설명 부족'만 막는다. 조건 자체의 불리함은 제기 가능하다.
+          (예: 중도해지 불이익을 설명했더라도 "해지이율이 낮다"는 여전히 유효한 지적)
+    """
+    from .concerns import type_label
+    from .facts import CONTRADICTION_RULES, is_contradicted
+    from .situation import TOPIC_LABEL
+
+    lines: list[str] = []
+
+    if facts is not None:
+        for type_id in CONTRADICTION_RULES:
+            if is_contradicted(type_id, facts):
+                lines.append(f"  - {type_label(type_id)} ({type_id}) — 이 상품·페르소나에서 성립하지 않음")
+    if lines:
+        lines.insert(0, "[성립하지 않는 우려 — 제기하지 말 것]")
+        lines.insert(1, "코드가 상품 정의와 페르소나 재무로 확인한 것이다. 제기해도 심판이 채택하지 않는다.")
+
+    disclosed = sorted(disclosed_topics(situation))
+    if disclosed:
+        if lines:
+            lines.append("")
+        lines.append("[이미 설명이 이루어진 항목 — '설명 부족'으로 제기하지 말 것]")
+        lines.append("판매 정황에 설명 사실이 명시되어 있다. 다만 조건 자체가 불리하다는 지적은 가능하다.")
+        for topic in disclosed:
+            lines.append(f"  - {TOPIC_LABEL.get(topic, topic)}")
+
+    if not lines:
+        return ""
+    lines.append("")
+    lines.append("위 항목을 빼고도 제기할 우려가 없다면, 억지로 만들지 말고")
+    lines.append("'중대한 우려 없음'이라고 밝혀라. 근거 없는 우려는 검토 비용만 늘린다.")
+    return "\n".join(lines)
+
+
 def build_verification(
     skeptic_text: str, facts: FactPack | None, situation: str = ""
 ) -> tuple[str, list[str]]:

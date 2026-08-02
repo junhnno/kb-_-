@@ -163,6 +163,15 @@ LABEL_DECOUPLING_RULE = """
   (4) 심각도가 '중대' 이상이다
 위 네 조건을 다 만족하는 우려가 하나도 없으면 **pass다.** 우려를 5개 적었더라도 pass다.
 우려의 **개수**는 라벨과 무관하다. 개수가 아니라 검증된 중대성만 본다.
+
+[혼동 금지 — 적합성은 '판매 행위의 적법성'이다]
+아래는 모두 적합성 판정의 근거가 **아니다.** 가입의향점수에만 반영하라.
+  - 페르소나가 망설이거나 부담스러워한다 → 구매 의사의 문제이지 판매원칙 위반이 아니다
+  - 가입의향점수가 낮다 → 상품이 안 팔린다는 뜻이지 부적합하다는 뜻이 아니다
+  - 회의론자가 우려를 제기했다 → 역할상 항상 제기한다. 그 자체는 근거가 아니다
+  - 상품군에 일반적으로 있는 조항이 존재한다 → 이 페르소나에게 실제 불리해야 근거가 된다
+적합성은 "이 사람에게 이렇게 파는 것이 판매원칙을 어겼는가"만 본다.
+페르소나가 안 사겠다고 해도, 판매 과정이 적법했다면 pass다.
 """
 
 
@@ -258,10 +267,20 @@ def persona_first_user(ctx: str, advocate_text: str) -> str:
     )
 
 
-def skeptic_user(ctx: str, advocate_text: str, persona_text: str) -> str:
+def skeptic_user(
+    ctx: str, advocate_text: str, persona_text: str, guard: str = ""
+) -> str:
+    """회의론자 입력.
+
+    `guard`는 코드가 성립하지 않는다고 확인한 우려 유형 목록이다(claim_check.py).
+    **지시 바로 앞**에 놓아 발화 직전에 읽게 한다. 여기서 막으면 대화록 자체가
+    깨끗해져, 심판이 허위 우려에 anchoring되지 않는다.
+    """
+    block = f"\n{guard}\n" if guard else ""
     return (
         ctx
         + f"\n[옹호자 주장]\n{advocate_text}\n\n[페르소나 1차 반응]\n{persona_text}\n"
+        + block
         + "\n[지시] 옹호자 주장을 반박하고 이 페르소나에게 위험한 지점을 지적하라."
     )
 
