@@ -130,10 +130,16 @@ def _fact_reason(dropped_line: str, facts: FactPack) -> str:
     return f"시스템 계산값과 모순 — {detail}" if detail else f"시스템 계산값과 모순 ({raw})"
 
 
-def verification_block(rejected: list[tuple[str, str]]) -> str:
-    """심판 프롬프트에 붙일 검증 결과. 기각이 없으면 빈 문자열."""
+def verification_block(rejected: list[tuple[str, str]], n_total: int = 0) -> str:
+    """심판 프롬프트에 붙일 검증 결과. 기각이 없으면 빈 문자열.
+
+    기각 목록만 보여주면 심판은 "그래도 나머지가 있으니 warn"으로 흐른다.
+    그래서 **살아남은 주장이 몇 건인지**를 함께 알린다. 전부 기각됐다면
+    그 사실을 명시적으로 말해줘야 pass를 줄 수 있다.
+    """
     if not rejected:
         return ""
+    survived = max(0, n_total - len(rejected))
     lines = [
         "[코드 검증 결과 — 아래 주장은 주어진 사실과 직접 모순되어 기각되었다]",
         "이 검증은 LLM 판단이 아니라 상품 정의·페르소나 재무·판매 정황에서 코드가 계산한 것이다.",
@@ -142,12 +148,19 @@ def verification_block(rejected: list[tuple[str, str]]) -> str:
     for i, (claim, reason) in enumerate(rejected[:MAX_ITEMS], 1):
         text = claim if len(claim) <= MAX_CLAIM_CHARS else claim[:MAX_CLAIM_CHARS] + "…"
         lines.append(f"{i}. \"{text}\"\n   → 기각: {reason}")
-    lines += [
-        "",
-        "[지시] 위 기각 항목은 판정 근거로 삼지 말라. 남은 우려만으로 판정하라.",
-        "기각된 항목이 많다는 것은 제기된 우려에 비해 **실제 위험 근거가 약하다**는 뜻이다.",
-        "우려가 제기되었다는 사실 자체는 warn/fail의 근거가 되지 않는다.",
-    ]
+    lines += ["", f"[검증 요약] 회의론자 주장 {n_total}건 중 {len(rejected)}건 기각, "
+              f"{survived}건 통과."]
+    if survived == 0:
+        lines += [
+            "**검증을 통과한 위험 근거가 하나도 없다.** 회의론자가 제기한 모든 주장이",
+            "상품 정의·재무 계산값·판매 정황과 모순되었다. 이 경우 적합성은 pass다.",
+        ]
+    else:
+        lines += [
+            f"[지시] 기각 항목은 판정 근거로 삼지 말고, 통과한 {survived}건만으로 판정하라.",
+            "기각이 많다는 것은 제기된 우려에 비해 **실제 위험 근거가 약하다**는 뜻이다.",
+            "우려가 제기되었다는 사실 자체는 warn/fail의 근거가 되지 않는다.",
+        ]
     return "\n".join(lines)
 
 
@@ -158,6 +171,7 @@ def build_verification(
 
     기록은 `DebateResult.dropped_concerns`에 남겨 사후 분석에 쓴다.
     """
-    rejected = check_claims(split_claims(skeptic_text), facts, situation)
+    claims = split_claims(skeptic_text)
+    rejected = check_claims(claims, facts, situation)
     log = [f"{c} [디베이트 중 기각: {r}]" for c, r in rejected]
-    return verification_block(rejected), log
+    return verification_block(rejected, n_total=len(claims)), log

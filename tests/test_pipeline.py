@@ -996,7 +996,8 @@ def test_claim_check_rejects_contradicted_skeptic_claims():
     )
     block, log = build_verification(skeptic, f, c.facts)
     assert len(log) == 4, f"4건 모두 기각돼야 한다: {log}"
-    assert "판정 근거로 삼지 말라" in block
+    # 4건이 전부 기각됐으므로 '통과한 근거 없음 → pass'를 명시해야 한다
+    assert "0건 통과" in block and "적합성은 pass다" in block
     # 심판이 무엇과 모순인지 알 수 있게 수치가 들어가야 한다
     assert "여유자금" in block and "DSR" in block
 
@@ -1042,3 +1043,26 @@ def test_judge_user_places_verification_before_instruction():
     assert out.index("TRANSCRIPT") < out.index("VERIFY") < out.index("[지시]")
     # 검증이 없으면 기존과 동일한 형태를 유지한다
     assert "VERIFY" not in P.judge_user("CTX", "TRANSCRIPT")
+
+
+def test_verification_block_reports_survivors():
+    """기각 목록만 보여주면 '나머지가 있으니 warn'으로 흐른다. 통과 건수를 알려야 한다."""
+    from fdm.claim_check import verification_block
+
+    all_rejected = verification_block([("a", "r1"), ("b", "r2")], n_total=2)
+    assert "3건" not in all_rejected
+    assert "0건 통과" in all_rejected and "적합성은 pass다" in all_rejected
+
+    partial = verification_block([("a", "r1")], n_total=3)
+    assert "2건 통과" in partial
+    assert "pass다" not in partial, "일부만 기각인데 pass를 단정하면 안 된다"
+
+
+def test_label_decoupling_rule_is_flag_gated():
+    """근거 검증 레이어와 한 세트로만 켜져야 baseline 비교가 성립한다."""
+    from fdm.agents import prompts as P
+
+    assert "우려의 **개수**는 라벨과 무관" not in P.judge_system()
+    assert "우려의 **개수**는 라벨과 무관" in P.judge_system(decouple_label=True)
+    # 목록은 계속 다 채우라는 기존 규칙이 살아 있어야 recall이 유지된다
+    assert "누락 없이 옮긴다" in P.judge_system(decouple_label=True)

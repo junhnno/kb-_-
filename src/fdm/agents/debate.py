@@ -211,7 +211,7 @@ def run_debate(
 
     judge_obj = client.chat_json(
         role="judge",
-        system=P.judge_system(),
+        system=P.judge_system(decouple_label=cfg.verify_claims),
         user=P.judge_user(ctx, transcript, verification),
         temperature=cfg.temperature_judge,
         seed=seed + 44,
